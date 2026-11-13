@@ -81,7 +81,7 @@ ${preload.map((f) => `<link rel="preload" href="${url(f)}" as="font" type="font/
 <span class="dx-top__sp"></span>
 <form class="dx-search" role="search" onsubmit="return false"><input type="search" aria-label="Search the docs" placeholder="Search" autocomplete="off"><kbd aria-hidden="true">/</kbd><div class="dx-results" role="region" aria-label="Search results" aria-live="polite" hidden></div></form>
 <button class="jp-btn jp-btn--ghost jp-btn--sm" type="button" data-theme-toggle>Auto</button>
-${config.repo ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}
+${config.pdf ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${home}${esc(config.pdf)}">PDF</a>` : ""}${config.repo ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}
 ${logo ? `<a class="dx-logo dx-top__logo" href="${home}" aria-label="${esc(config.project)}: home"><img class="dx-logo__light" src="${a("logo-light.svg")}" alt=""><img class="dx-logo__dark" src="${a("logo-dark.svg")}" alt=""></a>` : ""}
 </div></header>
 <div class="jp-container dx-shell${wide ? " dx-shell--wide" : ""}">
@@ -108,7 +108,7 @@ ${wide ? "" : tocHtml}
     if (page.id === "index") {
       const first = flat[0]; const art = config.hero ? graphicSvg(config.hero, root) : "";
       const cards = nav.map((s) => { const ic = s.icon ? graphicSvg(`icon/${s.icon}`, root) : ""; return `<section class="dx-card"><h2>${ic}${esc(s.title)}</h2>${s.summary ? `<p>${esc(s.summary)}</p>` : ""}<ul>${s.pages.map((p) => `<li><a href="${pageHref(url, p.id)}">${esc(p.meta.title)}</a></li>`).join("")}</ul></section>`; }).join("\n");
-      main = `<div class="dx-hero"><div><p class="jp-eyebrow">${esc(version || "documentation")}</p><h1 class="dx-hero__title">${esc(config.project)}</h1><p class="dx-hero__lead">${esc(config.description || page.meta.summary)}</p><div class="dx-hero__act">${first ? `<a class="jp-btn jp-btn--primary" href="${pageHref(url, first.id)}">Start reading</a>` : ""}${config.repo ? `<a class="jp-btn jp-btn--secondary" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}</div></div>${art ? `<div class="dx-hero__art" aria-hidden="true">${art}</div>` : ""}</div>
+      main = `<div class="dx-hero"><div><p class="jp-eyebrow">${esc(version || "documentation")}</p><h1 class="dx-hero__title">${esc(config.project)}</h1><p class="dx-hero__lead">${esc(config.description || page.meta.summary)}</p><div class="dx-hero__act">${first ? `<a class="jp-btn jp-btn--primary" href="${pageHref(url, first.id)}">Start reading</a>` : ""}${config.pdf ? `<a class="jp-btn jp-btn--secondary" href="${url("")}${esc(config.pdf)}">Download the PDF</a>` : ""}${config.repo ? `<a class="jp-btn jp-btn--secondary" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}</div></div>${art ? `<div class="dx-hero__art" aria-hidden="true">${art}</div>` : ""}</div>
 <div class="dx-rule" aria-hidden="true">${graphicSvg("rule/end", root) ?? ""}</div>
 <div class="dx-cards">${cards}</div>
 ${page.tree.length ? `<div class="dx-landing-body dx-prose">${w.body(page, url)}</div>` : ""}`;

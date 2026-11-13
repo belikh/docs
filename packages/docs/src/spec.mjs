@@ -53,6 +53,7 @@ export const CONFIG_KEYS = {
   graphicsUrl: "string: URL template for graphics in generated Markdown: {root} {tier} {name} {theme}",
   latexDir: "string: a directory holding jupiter-docs.cls (monorepo packages/latex, or an unpacked jupiter-latex.tgz)",
   author: "string: author line on the PDF cover",
+  pdf: "string: file name of the published PDF in the site root (for example jupiter-docs.pdf); adds a PDF link to the top bar and the landing page",
   sources: "list of { repo, ref, files } fetched by jupiter-docs import: ref is a tag, a branch or latest (the newest release); files maps a repo path to { id, title, summary, section, order, icon, audience, status }",
   designDir: "string: where the design system release is unpacked (default vendor/design, or $JUPITER_DESIGN_DIR)",
 };

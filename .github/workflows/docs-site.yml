@@ -30,6 +30,16 @@ jobs:
       - run: node scripts/update-design.mjs --require-fonts   # the SGI and JetBrains Mono web fonts must be in the release
       - run: npm run check
       - run: npm run build:site
+      - name: Install TeX Live   # for the PDF the site offers; the class loads our fonts from the design bundle, so no font packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends texlive-xetex texlive-latex-recommended texlive-latex-extra \
+            texlive-pictures texlive-fonts-recommended poppler-utils librsvg2-bin
+      - name: Build the PDF, check its fonts and put it and a cover preview in the site
+        run: |
+          npm run build:pdf
+          cp dist/jupiter-docs.pdf dist/site/jupiter-docs.pdf
+          pdftoppm -r 70 -f 1 -l 1 -png -singlefile dist/jupiter-docs.pdf dist/site/jupiter-docs
       - name: Fail if the SGI fonts were not bundled
         run: ls dist/site/assets/fonts | grep -qi "sgi-text"
       - run: touch dist/site/.nojekyll

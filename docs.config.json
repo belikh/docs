@@ -6,6 +6,7 @@
   "repo": "https://github.com/belikh/docs",
   "siteUrl": "https://docs.jupiter.au",
   "author": "belikh",
+  "pdf": "jupiter-docs.pdf",
   "hero": "spot/summit",
   "sections": [
     { "id": "use", "title": "Use", "summary": "Depend on the design system from a project.", "icon": "link" },
