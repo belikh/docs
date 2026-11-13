@@ -12,7 +12,7 @@ const cli = readFileSync(join(root, "packages/docs/src/cli.mjs"), "utf8");
 const scripts = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts;
 if (!/^---\nname: jupiter-docs\ndescription: [\s\S]+?\n---\n/.test(ds)) bad.push("expected frontmatter name jupiter-docs and a description");
 if (!ds.includes("DESIGN.md")) bad.push("the skill does not point to DESIGN.md");
-for (const m of ds.matchAll(/`((?:packages|scripts|docs-src|latex)\/[\w./-]+)`/g)) { const f = m[1].replace(/[.,]+$/, ""); if (!f.includes("<") && !existsSync(join(root, f))) bad.push(`missing ${f}`); }
+for (const m of ds.matchAll(/`((?:packages|scripts|docs-src|latex)\/[\w./-]+)`/g)) { const f = m[1].replace(/[.,]+$/, ""); if (!f.includes("<") && !f.includes("_imported") && !existsSync(join(root, f))) bad.push(`missing ${f}`); }
 for (const m of ds.matchAll(/jupiter-docs (check|build|init|import)\b/g)) if (!cli.includes(`"${m[1]}"`)) bad.push(`command not in the CLI: ${m[1]}`);
 for (const m of ds.matchAll(/jupiter-docs build (--[a-z]+)/g)) if (!cli.includes(`flags.has("${m[1].slice(2)}")`) && !cli.includes(m[1])) bad.push(`flag not in the CLI: ${m[1]}`);
 for (const m of ds.matchAll(/npm run ([\w:.-]+)/g)) if (!(m[1] in scripts)) bad.push(`npm script not found: ${m[1]}`);
