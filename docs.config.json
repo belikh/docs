@@ -1,0 +1,29 @@
+{
+  "project": "Jupiter documentation",
+  "id": "jupiter-docs",
+  "description": "How to depend on the Jupiter design system and build with it, and how documentation for jupiter.au projects is written. Each project's pages come from its latest release.",
+  "versionFrom": "vendor/design/release.json",
+  "repo": "https://github.com/belikh/docs",
+  "siteUrl": "https://docs.jupiter.au",
+  "author": "belikh",
+  "hero": "spot/summit",
+  "sections": [
+    { "id": "use", "title": "Use", "summary": "Depend on the design system from a project.", "icon": "link" },
+    { "id": "build", "title": "Build", "summary": "Page shapes and components for apps.", "icon": "app" },
+    { "id": "contribute", "title": "Write", "summary": "How documentation is written and published.", "icon": "edit" }
+  ],
+  "sources": [
+    {
+      "repo": "belikh/design",
+      "ref": "latest",
+      "files": {
+        "docs/consuming.md": { "id": "consuming", "title": "Depending on the design system", "summary": "How a project takes the design system as a dependency, and how a change reaches every project.", "section": "use", "order": 10, "icon": "link", "audience": "developers", "status": "stable" },
+        "docs/recipes.md": { "id": "recipes", "title": "Page recipes", "summary": "The five page shapes (list, detail, form, dashboard, kiosk) and the scaffold that generates each.", "section": "build", "order": 10, "icon": "app", "audience": "developers", "status": "stable" }
+      }
+    }
+  ],
+  "glossary": {
+    "Token": "A named design constant, such as a colour or a spacing step, defined once in jupiter.tokens.json and generated into every target.",
+    "Graphic": "A one-stroke SVG from the graphics set: an icon, a spot illustration, a scene or a rule."
+  }
+}

@@ -1,0 +1,47 @@
+# Publishes https://docs.jupiter.au (GitHub Pages) from this repository and the latest belikh/design release.
+# Runs on a push, every day, by hand, and when the design repository sends a repository_dispatch event of type
+# design-released, so a new design release changes the site without a commit here.
+name: docs-site
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 19 * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [design-released]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: docs-site
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/update-design.mjs --require-fonts   # the SGI and JetBrains Mono web fonts must be in the release
+      - run: npm run check
+      - run: npm run build:site
+      - name: Fail if the SGI fonts were not bundled
+        run: ls dist/site/assets/fonts | grep -qi "sgi-text"
+      - run: touch dist/site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

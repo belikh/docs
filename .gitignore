@@ -1,0 +1,12 @@
+node_modules
+# the design system release, downloaded by npm run update:design
+vendor/
+# pages fetched from other repositories by jupiter-docs import
+docs-src/_imported/
+# build output
+dist/
+*.log
+.DS_Store
+# files copied into packages/docs by the prepack step
+packages/docs/latex/
+packages/docs/skill/
