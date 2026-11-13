@@ -28,7 +28,7 @@ export function mdWriter({ pages, config, graphicUrl }) {
       case "link": return `[${inl(n.children, page, tbl)}](${n.href.replace(/[() ]/g, (c) => encodeURIComponent(c))}${n.title ? ` "${n.title.replace(/"/g, '\\"')}"` : ""})`;
       case "image": return `![${escText(n.alt)}](${n.src.replace(/[() ]/g, (c) => encodeURIComponent(c))})`;
       case "xref": {
-        const t = byId.get(n.id); if (t?.meta.source) return `[${n.children ? inl(n.children, page, tbl) : escText(n.text || t.meta.title, tbl)}](${t.meta.source.url}${n.anchor ? `#${n.anchor}` : ""})`;
+        const t = byId.get(n.id); if (t?.meta.source) { /* an imported page: link the published site, which does not change with the source project's release tag (a tag link would make the committed Markdown stale on every release) */ const href = config.siteUrl ? `${config.siteUrl.replace(/\/$/, "")}/${n.id}/` : t.meta.source.url; return `[${n.children ? inl(n.children, page, tbl) : escText(n.text || t.meta.title, tbl)}](${href}${n.anchor ? `#${n.anchor}` : ""})`; }
         const rel = posix.relative(posix.dirname(mdPath(page.id)), mdPath(n.id)); const text = n.children ? inl(n.children, page, tbl) : escText(n.text || t?.meta.title || n.id, tbl);
         return `[${text}](${rel}${n.anchor ? `#${n.anchor}` : ""})`;
       }

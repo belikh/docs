@@ -103,7 +103,7 @@ A [[term:Token]] is defined once in the glossary.
 :::
 ```
 
-See [the fonts section](https://github.com/belikh/design/blob/v1.3.2/docs/consuming.md#fonts) for the licensed typefaces. A [Token](glossary.md#term-token) is a named design constant.
+See [the fonts section](https://docs.jupiter.au/consuming/#fonts) for the licensed typefaces. A [Token](glossary.md#term-token) is a named design constant.
 
 Links to files outside the source folder, such as `../AGENTS.md`, are checked against the repository and become repository links on the site. Raw HTML is not allowed.
 
@@ -171,6 +171,6 @@ Graphics come only from `@belikh/jupiter-graphics`. If the set lacks one, add it
 
 **See also**
 
-- [Depending on the design system](https://github.com/belikh/design/blob/v1.3.2/docs/consuming.md)
-- [Page recipes](https://github.com/belikh/design/blob/v1.3.2/docs/recipes.md)
+- [Depending on the design system](https://docs.jupiter.au/consuming/)
+- [Page recipes](https://docs.jupiter.au/recipes/)
 - [Glossary](glossary.md)
