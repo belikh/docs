@@ -115,5 +115,6 @@ Same voice as the `github-readme` skill: plain words, short sentences, say what 
 - `packages/docs`: the generator (`src/spec.mjs` lists every directive and header key; `src/cli.mjs` the commands).
 - `docs-src` and `docs.config.json`: the site's source. `docs/writing-documentation.md` is the full format reference.
 - `latex/jupiter-docs.cls`: the PDF class.
+- `skill-readme/SKILL.md` in `belikh/docs`: the `github-readme` skill, for README files. `jupiter-docs init` links it and this skill into a project's `.claude/skills`.
 - `scripts/update-design.mjs`: downloads the design system release.
 - Pages of other projects are fetched by `jupiter-docs import` into `docs-src/_imported/<project id>/`, with the list of projects in `projects.json` beside them; the front matter key `source` marks them. Do not edit them in `belikh/docs`: change the file in its own repository.

@@ -9,7 +9,7 @@ The documentation site of every jupiter.au project (docs.jupiter.au), its PDF an
 - Documentation is written with the `jupiter-docs` skill (`skill/SKILL.md`). Pages of other projects come from `discover` and `sources` in `docs.config.json` through `jupiter-docs import`; change them in their own repository and never commit `docs-src/_imported`.
 - A project registers by committing `docs.config.json` and `docs-src` to its own repository (`docs-src/adding-a-project.md`). Only add a `sources` entry for a repository that `discover` cannot find or that needs a fixed `ref` or `id`.
 - A change to the source format changes `packages/docs/src/spec.mjs`, `skill/SKILL.md` and `docs-src/writing-documentation.md` together; `npm run lint` checks the first two.
-- README.rst follows the `github-readme` skill. Plain wording: no slogans, no "X, not Y", no emoji.
+- README.rst follows the `github-readme` skill, which lives here in `skill-readme/SKILL.md`. Plain wording: no slogans, no "X, not Y", no emoji.
 - Commits are authored by `belikh <io@belic.net>` with no attribution lines. The body has a "Why:" paragraph.
 
 ## Commands
@@ -23,5 +23,5 @@ The documentation site of every jupiter.au project (docs.jupiter.au), its PDF an
 - `packages/docs`: generator. `src/spec.mjs` lists every directive, front matter key and config key.
 - `docs-src`, `docs.config.json`: this repository's own pages and the project list. `docs/*.md` is generated from them and committed (`jupiter-docs build --check` fails when stale).
 - `packages/docs/src/import.mjs`: discovery and import. `source.mjs` groups pages into projects; `project.mjs` leaves out an imported project that has errors.
-- `latex/jupiter-docs.cls`, `skill/SKILL.md`: copied into `packages/docs` on `npm pack` by `scripts/stage-package.mjs`.
+- `latex/jupiter-docs.cls`, `skill/SKILL.md` (`jupiter-docs`), `skill-readme/SKILL.md` (`github-readme`): copied into `packages/docs` on `npm pack` by `scripts/stage-package.mjs`. `jupiter-docs init` links both skills into a project.
 - `.github/workflows`: `ci`, `docs-site`. `docs-site` runs on push, daily, on demand and on `repository_dispatch` (`design-released`, `docs-changed`).

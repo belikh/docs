@@ -102,6 +102,8 @@ Layout
      - The PDF class; it loads ``jupiter.sty`` from the design bundle
    * - ``skill/SKILL.md``
      - The ``jupiter-docs`` agent skill, shipped in the package
+   * - ``skill-readme/SKILL.md``
+     - The ``github-readme`` agent skill for README files, shipped in the package
    * - ``scripts``
      - ``update-design.mjs``, ``check-skill.mjs``, ``check-pdf-fonts.mjs``
    * - ``.github/workflows``

@@ -17,6 +17,7 @@
     "assets",
     "latex",
     "skill",
+    "skill-readme",
     "README.md"
   ],
   "scripts": {

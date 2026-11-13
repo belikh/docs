@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The agent skill (skill/SKILL.md) must match the generator: every path, command, flag, npm script, directive, front matter key
+// The agent skills must match what they describe. skill/SKILL.md must match the generator: every path, command, flag, npm script, directive, front matter key
 // and config key it names must exist, and every directive and front matter key must be documented in it.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -21,5 +21,16 @@ for (const d of spec.DIRECTIVES) if (!ds.includes(d)) bad.push(`directive not do
 for (const sec of spec.STANDARD_SECTIONS) if (!ds.includes(`| \`${sec.id}\` | ${sec.title} |`)) bad.push(`standard section not documented in the skill: ${sec.id}`);
 for (const k of Object.keys(spec.FRONT_MATTER)) if (!ds.includes(`\`${k}\``)) bad.push(`front matter key not documented in the skill: ${k}`);
 for (const k of ["project", "version", "versionFrom", "repo", "siteUrl", "base", "sections", "glossary", "hero", "sources", "discover", "description", "icon"]) if (!ds.includes(k)) bad.push(`config key not documented in the skill: ${k}`);
+// The github-readme skill (skill-readme/SKILL.md) names templates and graphics of the design system: check them against the
+// release in vendor/design, so a renamed template or graphic is caught here.
+const rs = readFileSync(join(root, "skill-readme/SKILL.md"), "utf8"); const gh = join(root, "vendor/design/node_modules/@belikh/jupiter-github");
+if (!/^---\nname: github-readme\ndescription: [\s\S]+?\n---\n/.test(rs)) bad.push("github-readme: expected frontmatter name github-readme and a description");
+if (!rs.includes("DESIGN.md")) bad.push("github-readme: the skill does not point to DESIGN.md");
+if (!ds.includes("`github-readme`")) bad.push("the jupiter-docs skill does not name the github-readme skill");
+if (/belikh\/design\/main\//.test(rs)) bad.push("github-readme: a link points at main of belikh/design; use the latest tag");
+if (existsSync(gh)) {
+  for (const t of ["README.rst", "profile-README.rst", "org-profile-README.rst"]) if (!rs.includes(t) || !existsSync(join(gh, "templates", t))) bad.push(`github-readme: template ${t} is not named in the skill or not in the design release`);
+  for (const m of rs.matchAll(/packages\/github\/graphics\/(icon|rule|spot|scene)\/([\w-]+)-(light|dark)\.svg/g)) if (!existsSync(join(gh, "graphics", m[1], `${m[2]}-${m[3]}.svg`))) bad.push(`github-readme: graphic not in the design release: ${m[1]}/${m[2]}-${m[3]}.svg`);
+} else console.warn("warning: vendor/design is missing (npm run update:design): the templates and graphics named by github-readme are not checked");
 if (bad.length) { console.error(`SKILL.md drift:\n  ${bad.join("\n  ")}`); process.exit(1); }
-console.log("The agent skill matches the generator.");
+console.log("The agent skills match the generator and the design release.");

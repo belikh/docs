@@ -20,6 +20,7 @@ export function init(dir) {
   }
   mkdirSync(join(root, ".claude/skills"), { recursive: true });
   try { symlinkSync("../../node_modules/@belikh/jupiter-docs/skill", join(root, ".claude/skills/jupiter-docs")); } catch { /* exists */ }
+  try { symlinkSync("../../node_modules/@belikh/jupiter-docs/skill-readme", join(root, ".claude/skills/github-readme")); } catch { /* exists */ }
   console.log(`Created docs.config.json and docs-src in ${root}\n  npm install --save-dev @belikh/jupiter-docs\n  npx jupiter-docs check && npx jupiter-docs build\n  Commit docs.config.json, docs-src and the generated docs/.
   Add pages in the folders start, guides, reference, concepts and develop of docs-src; each folder is a section.
   A public repository of belikh then appears on docs.jupiter.au at the next daily build. Other repositories add

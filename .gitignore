@@ -10,3 +10,4 @@ dist/
 # files copied into packages/docs by the prepack step
 packages/docs/latex/
 packages/docs/skill/
+packages/docs/skill-readme/
