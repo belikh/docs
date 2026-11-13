@@ -2,4 +2,4 @@
 
 # Jupiter documentation
 
-The design system is one JSON file of tokens and the outputs generated from it: CSS, React components, graphics, fonts, LaTeX classes and more. These pages say how to depend on it and how to build with it.
+Each project writes its pages in a `docs-src` folder in its own repository. This site fetches them from the project's latest release once a day and shows them under the project's name. [Add a project](adding-a-project.md) has the steps to put a project here, and [Writing documentation](writing-documentation.md) is the format reference.

@@ -59,7 +59,7 @@ export function texWriter({ pages, config }) {
       case "callout": { const c = CALLOUTS[n.kind]; return `\\begin{jpcallout}[${c.tex}]{${texEscape(n.title || c.label)}}\n${blk(n.children, page)}\n\\end{jpcallout}`; }
       case "seealso": return `\\jpseealso{}\n${blk(n.children, page)}`;
       case "graphic": { const [tier, name] = n.ref.split("/"); return `\\jpgraphic{${tier}}{${name}}{${texEscape(n.alt)}}`; }
-      case "glossary": return `\\begin{jpglossary}\n${Object.entries(config.glossary).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `\\jpgloss{${texEscape(k)}}{${texEscape(v)}}`).join("\n")}\n\\end{jpglossary}`;
+      case "glossary": return `\\begin{jpglossary}\n${Object.entries(page.project.glossary).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `\\jpgloss{${texEscape(k)}}{${texEscape(v)}}`).join("\n")}\n\\end{jpglossary}`;
       default: return "";
     }
   }
@@ -67,7 +67,9 @@ export function texWriter({ pages, config }) {
     return `\\jppage{${pageLabel(page.id)}}{${texEscape(page.meta.title)}}{${texEscape(page.meta.summary)}}\n\n${blk(page.tree, page)}`;
   }
   return {
-    document({ nav, date, version, hasLogo }) {
+    // nav: the sections of this repository. projects: the imported projects; each adds an introduction and its sections,
+    // titled "Project: Section" so the contents list says which project a section belongs to.
+    document({ nav, projects = [], date, version }) {
       const head = [
         "\\documentclass{jupiter-docs}",
         `\\title{${texEscape(config.project)}}`,
@@ -83,7 +85,13 @@ export function texWriter({ pages, config }) {
       const index = pages.find((p) => p.id === "index");
       const body = [];
       if (index && index.tree.length) body.push(`\\jpintro{${texEscape(index.meta.title)}}\n\n${blk(index.tree, index)}`);
-      for (const s of nav) { body.push(`\\jpdocsection{${texEscape(s.title)}}{${texEscape(s.summary ?? "")}}`); for (const p of s.pages) body.push(pageTex(p)); }
+      const sections = (list, prefix) => { for (const s of list) { body.push(`\\jpdocsection{${texEscape(prefix + s.title)}}{${texEscape(s.summary ?? "")}}`); for (const p of s.pages) body.push(pageTex(p)); } };
+      sections(nav, "");
+      for (const pr of projects.filter((x) => !x.local)) {
+        const lead = [pr.summary && texEscape(pr.summary), pr.index && blk(pr.index.tree, pr.index)].filter(Boolean).join("\n\n");
+        body.push(`\\jpintro{${texEscape(pr.title)}}${pr.index ? `\\jpanchor{${pageLabel(pr.index.id)}}` : ""}\n\n${lead}`);
+        sections(pr.nav, `${pr.title}: `);
+      }
       return `${head.join("\n")}\n\n${body.join("\n\n")}\n\n\\end{document}\n`;
     },
   };

@@ -22,7 +22,7 @@ async function logoFiles(project) {
 }
 
 export async function buildSite(project) {
-  const { config, root, pages, nav } = project; const out = join(root, config.siteOut); const assets = {};
+  const { config, root, pages, projects } = project; const hub = projects[0]; const others = projects.filter((p) => !p.local); const out = join(root, config.siteOut); const assets = {};
   rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true });
 
   // ---- CSS: fonts + tokens + components + graphics + site layout (read from the packages, not copied into the repo)
@@ -46,10 +46,10 @@ export async function buildSite(project) {
   if (logo) { hashed(out, assets, "logo-light.svg", logo.light); hashed(out, assets, "logo-dark.svg", logo.dark); hashed(out, assets, "favicon.svg", logo.fav); }
 
   // ---- search index
-  const ordered = []; for (const s of nav) for (const p of s.pages) ordered.push({ p, s });
-  const sectionOf = (p) => config.sections.find((s) => s.id === p.meta.section);
+  const sectionOf = (p) => p.project.sections.find((s) => s.id === p.meta.section);
+  const dirOf = (p) => (pageDir(p.id) ? `${pageDir(p.id)}/` : "");
   const textOf = (p) => { const parts = []; visit(p.tree, (n) => { if (["paragraph", "heading"].includes(n.type)) parts.push(plain(n.children)); if (n.type === "codeblock") parts.push(n.text); }); return parts.join(" ").replace(/\s+/g, " ").slice(0, 6000); };
-  const index = pages.map((p) => ({ u: p.id === "index" ? "" : `${p.id}/`, t: p.meta.title, s: p.meta.summary, sec: sectionOf(p)?.title ?? "", h: p.headings.filter((h) => h.depth > 1).map((h) => h.text), x: textOf(p) }));
+  const index = pages.map((p) => ({ u: dirOf(p), t: p.meta.title, s: p.meta.summary, sec: [p.project.local ? "" : p.project.title, p === p.project.index ? "" : sectionOf(p)?.title].filter(Boolean).join(" / "), h: p.headings.filter((h) => h.depth > 1).map((h) => h.text), x: textOf(p) }));
   hashed(out, assets, "search.json", JSON.stringify(index));
 
   const w = htmlWriter({ pages, config, root }); const version = config.version ? `v${config.version}` : "";
@@ -57,9 +57,15 @@ export async function buildSite(project) {
 
   function layout({ page, title, desc, main, toc = [], wide = false, url, rootRel }) {
     const a = (k) => url(assets[k]); const home = url("");
-    const navHtml = nav.map((s) => `<p class="jp-label dx-nav__sec">${esc(s.title)}</p>\n<ul>${s.pages.map((p) => `<li><a href="${pageHref(url, p.id)}"${page && p.id === page.id ? ' aria-current="page"' : ""}>${esc(p.meta.title)}</a></li>`).join("")}</ul>`).join("\n");
+    // the navigation of the page's project, then the list of projects
+    const pr = page?.project ?? hub; const cur = (on, v = "page") => (on ? ` aria-current="${v}"` : "");
+    const navHtml = [
+      pr.local || !pr.index ? "" : `<p class="dx-nav__proj"><a href="${pageHref(url, pr.index.id)}"${cur(page === pr.index)}>${esc(pr.title)}</a></p>`,
+      ...pr.nav.map((s) => `<p class="jp-label dx-nav__sec">${esc(s.title)}</p>\n<ul>${s.pages.map((p) => `<li><a href="${pageHref(url, p.id)}"${cur(page && p.id === page.id)}>${esc(p.meta.title)}</a></li>`).join("")}</ul>`),
+      others.length ? `<p class="jp-label dx-nav__sec">Projects</p>\n<ul>${others.filter((o) => o.index).map((o) => `<li><a href="${pageHref(url, o.index.id)}"${cur(o === pr, "true")}>${esc(o.title)}</a></li>`).join("")}</ul>` : "",
+    ].filter(Boolean).join("\n");
     const tocHtml = toc.length > 1 ? `<aside class="dx-toc" aria-label="On this page"><p class="jp-label">On this page</p><ol>${toc.map((h) => `<li${h.depth > 2 ? ' class="dx-sub"' : ""}><a href="#${h.id}">${esc(h.text)}</a></li>`).join("")}</ol></aside>` : "";
-    const canonical = config.siteUrl && page ? `<link rel="canonical" href="${esc(config.siteUrl.replace(/\/$/, "") + config.base + (page.id === "index" ? "" : page.id + "/"))}">` : "";
+    const canonical = config.siteUrl && page ? `<link rel="canonical" href="${esc(config.siteUrl.replace(/\/$/, "") + config.base + dirOf(page))}">` : "";
     return `<!doctype html>
 <html lang="en" data-root="${esc(url(""))}" data-search="${esc(a("search.json"))}">
 <head>
@@ -98,26 +104,44 @@ ${wide ? "" : tocHtml}
 `;
   }
 
-  const titleOf = (p) => (p.id === "index" ? config.project : `${p.meta.title} · ${config.project}`);
-  const flat = ordered.map((o) => o.p);
+  const titleOf = (p) => (p.id === "index" ? config.project : [p === p.project.index ? "" : p.meta.title, p.project.local ? "" : p.project.title, config.project].filter(Boolean).join(" · "));
   const badge = (p) => [p.meta.status && `<span class="jp-badge jp-badge--${{ stable: "ok", draft: "warn", deprecated: "danger" }[p.meta.status]}">${esc(p.meta.status)}</span>`, p.meta.audience && `<span class="jp-badge jp-badge--info">${esc(p.meta.audience)}</span>`].filter(Boolean).join("");
+  const icon = (name) => (name ? graphicSvg(`icon/${name}`, root) ?? "" : "");
+  const nPages = (n) => `${n} ${n === 1 ? "page" : "pages"}`;
+  const release = (pr) => (pr.version ? `v${pr.version}` : pr.ref === "HEAD" ? "unreleased" : pr.ref && pr.ref !== "local" ? pr.ref : "");
+  const sectionCards = (pr, url) => pr.nav.map((s) => `<section class="dx-card"><h2>${icon(s.icon)}${esc(s.title)}</h2>${s.summary ? `<p>${esc(s.summary)}</p>` : ""}<ul>${s.pages.map((p) => `<li><a href="${pageHref(url, p.id)}">${esc(p.meta.title)}</a></li>`).join("")}</ul></section>`).join("\n");
+  const projectCards = (url) => others.filter((o) => o.index).map((o) => `<section class="dx-card"><h3>${icon(o.icon)}<a href="${pageHref(url, o.index.id)}">${esc(o.title)}</a></h3>${o.summary ? `<p>${esc(o.summary)}</p>` : ""}<p class="dx-card__meta">${esc([release(o), nPages(o.pages.length - 1)].filter(Boolean).join(" · "))}</p></section>`).join("\n");
+  const body = (page, url) => (page.tree.length ? `<div class="dx-prose">${w.body(page, url)}</div>` : "");
   let files = 0; const write = (rel, data) => { emit(out, rel, data); files++; };
 
   for (const page of pages) {
-    const url = makeUrl(config.base, page.id); let main;
+    const url = makeUrl(config.base, page.id); const pr = page.project; let main;
     if (page.id === "index") {
-      const first = flat[0]; const art = config.hero ? graphicSvg(config.hero, root) : "";
-      const cards = nav.map((s) => { const ic = s.icon ? graphicSvg(`icon/${s.icon}`, root) : ""; return `<section class="dx-card"><h2>${ic}${esc(s.title)}</h2>${s.summary ? `<p>${esc(s.summary)}</p>` : ""}<ul>${s.pages.map((p) => `<li><a href="${pageHref(url, p.id)}">${esc(p.meta.title)}</a></li>`).join("")}</ul></section>`; }).join("\n");
-      main = `<div class="dx-hero"><div><p class="jp-eyebrow">${esc(version || "documentation")}</p><h1 class="dx-hero__title">${esc(config.project)}</h1><p class="dx-hero__lead">${esc(config.description || page.meta.summary)}</p><div class="dx-hero__act">${first ? `<a class="jp-btn jp-btn--primary" href="${pageHref(url, first.id)}">Start reading</a>` : ""}${config.pdf ? `<a class="jp-btn jp-btn--secondary" href="${url("")}${esc(config.pdf)}">Download the PDF</a>` : ""}${config.repo ? `<a class="jp-btn jp-btn--secondary" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}</div></div>${art ? `<div class="dx-hero__art" aria-hidden="true">${art}</div>` : ""}</div>
+      // the home page: the projects first, then the sections of this repository
+      const first = hub.nav[0]?.pages[0] ?? others.find((o) => o.index)?.index; const art = config.hero ? graphicSvg(config.hero, root) : "";
+      main = `<div class="dx-hero"><div><p class="jp-eyebrow">${esc(others.length ? nPages(pages.length - 1) + " in " + others.length + (others.length === 1 ? " project" : " projects") : version || "documentation")}</p><h1 class="dx-hero__title">${esc(config.project)}</h1><p class="dx-hero__lead">${esc(config.description || page.meta.summary)}</p><div class="dx-hero__act">${first ? `<a class="jp-btn jp-btn--primary" href="${pageHref(url, first.id)}">Start reading</a>` : ""}${config.pdf ? `<a class="jp-btn jp-btn--secondary" href="${url("")}${esc(config.pdf)}">Download the PDF</a>` : ""}${config.repo ? `<a class="jp-btn jp-btn--secondary" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}</div></div>${art ? `<div class="dx-hero__art" aria-hidden="true">${art}</div>` : ""}</div>
 <div class="dx-rule" aria-hidden="true">${graphicSvg("rule/end", root) ?? ""}</div>
-<div class="dx-cards">${cards}</div>
-${page.tree.length ? `<div class="dx-landing-body dx-prose">${w.body(page, url)}</div>` : ""}`;
+${others.length ? `<h2 class="dx-group">Projects</h2>\n<div class="dx-cards">${projectCards(url)}</div>` : ""}
+${others.length && hub.nav.length ? `<h2 class="dx-group">${esc(config.project)}</h2>` : ""}
+<div class="dx-cards">${sectionCards(hub, url)}</div>
+${page.tree.length ? `<div class="dx-landing-body">${body(page, url)}</div>` : ""}`;
       write("index.html", layout({ page, title: titleOf(page), desc: config.description || page.meta.summary, main, wide: true, url }));
       continue;
     }
-    const i = flat.indexOf(page); const prev = flat[i - 1]; const next = flat[i + 1]; const sec = sectionOf(page);
-    const crumbs = `<nav class="dx-crumbs" aria-label="Breadcrumb"><ol><li><a href="${url("")}">Docs</a></li>${sec ? `<li>${esc(sec.title)}</li>` : ""}<li aria-current="page">${esc(page.meta.title)}</li></ol></nav>`;
+    if (page === pr.index) {
+      // the landing page of a project: what it is, where it comes from, its sections
+      const meta = [release(pr) && `<span class="jp-badge jp-badge--info">${esc(release(pr))}</span>`, pr.url && `<a href="${esc(pr.url)}" rel="noopener">${esc(pr.repo)}</a>`].filter(Boolean).join("");
+      main = `<nav class="dx-crumbs" aria-label="Breadcrumb"><ol><li><a href="${url("")}">Docs</a></li><li aria-current="page">${esc(pr.title)}</li></ol></nav>
+<header class="dx-head"><h1 class="dx-title">${esc(pr.title)}</h1><p class="dx-lead">${esc(pr.summary || page.meta.summary)}</p>${meta ? `<div class="dx-meta">${meta}</div>` : ""}<div class="dx-graphic dx-graphic--rule" aria-hidden="true">${graphicSvg("rule/underline", root) ?? ""}</div></header>
+<div class="dx-cards">${sectionCards(pr, url)}</div>
+${page.tree.length ? `<div class="dx-landing-body">${body(page, url)}</div>` : ""}`;
+      write(`${pageDir(page.id)}/index.html`, layout({ page, title: titleOf(page), desc: pr.summary || page.meta.summary, main, url }));
+      continue;
+    }
+    const flat = pr.nav.flatMap((s) => s.pages); const i = flat.indexOf(page); const prev = flat[i - 1]; const next = flat[i + 1]; const sec = sectionOf(page);
+    const crumbs = `<nav class="dx-crumbs" aria-label="Breadcrumb"><ol><li><a href="${url("")}">Docs</a></li>${!pr.local && pr.index ? `<li><a href="${pageHref(url, pr.index.id)}">${esc(pr.title)}</a></li>` : ""}${sec ? `<li>${esc(sec.title)}</li>` : ""}<li aria-current="page">${esc(page.meta.title)}</li></ol></nav>`;
     const pager = prev || next ? `<nav class="dx-pager" aria-label="Previous and next page">${prev ? `<a class="dx-prev" href="${pageHref(url, prev.id)}" rel="prev"><small>Previous</small><b>${esc(prev.meta.title)}</b></a>` : "<span></span>"}${next ? `<a class="dx-next" href="${pageHref(url, next.id)}" rel="next"><small>Next</small><b>${esc(next.meta.title)}</b></a>` : ""}</nav>` : "";
+    const src = page.meta.source;
     main = `${crumbs}
 <article>
 <header class="dx-head"><h1 class="dx-title">${esc(page.meta.title)}</h1><p class="dx-lead">${esc(page.meta.summary)}</p>${badge(page) ? `<div class="dx-meta">${badge(page)}</div>` : ""}<div class="dx-graphic dx-graphic--rule" aria-hidden="true">${graphicSvg("rule/underline", root) ?? ""}</div></header>
@@ -126,8 +150,8 @@ ${w.body(page, url)}
 </div>
 </article>
 ${pager}
-${page.meta.source ? `<p class="dx-edit"><a href="${esc(page.meta.source.url)}" rel="noopener">Source: ${esc(page.meta.source.repo)} ${esc(page.meta.source.ref)}</a></p>` : config.repo ? `<p class="dx-edit"><a href="${esc(`${config.repo}/edit/${config.repoBranch}/${page.file}`)}" rel="noopener">Edit this page on the source repository</a></p>` : ""}`;
-    write(`${page.id}/index.html`, layout({ page, title: titleOf(page), desc: page.meta.summary, main, toc: page.headings.filter((h) => h.depth <= 3 && h.depth > 1), url }));
+${src ? (src.url ? `<p class="dx-edit"><a href="${esc(src.url)}" rel="noopener">Source: ${esc(src.repo)} ${esc(src.ref)}</a></p>` : "") : config.repo ? `<p class="dx-edit"><a href="${esc(`${config.repo}/edit/${config.repoBranch}/${page.file}`)}" rel="noopener">Edit this page on the source repository</a></p>` : ""}`;
+    write(`${pageDir(page.id)}/index.html`, layout({ page, title: titleOf(page), desc: page.meta.summary, main, toc: page.headings.filter((h) => h.depth <= 3 && h.depth > 1), url }));
   }
 
   // 404: base-absolute URLs because it is served at any depth
@@ -135,9 +159,13 @@ ${page.meta.source ? `<p class="dx-edit"><a href="${esc(page.meta.source.url)}" 
   write("404.html", layout({ page: null, title: `Page not found · ${config.project}`, desc: "Page not found", url: u404, wide: true, main: `<div class="dx-404"><p class="jp-eyebrow">404</p><h1 class="dx-title">Page not found</h1><p class="dx-lead">There is no page at this address. Search for it, or start from the <a href="${u404("")}">home page</a>.</p><div class="dx-graphic dx-graphic--spot" aria-hidden="true">${graphicSvg("spot/not-found", root) ?? ""}</div></div>` }));
   if (config.siteUrl) {
     const site = config.siteUrl.replace(/\/$/, "") + config.base;
-    write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${pages.map((p) => `<url><loc>${esc(site + (p.id === "index" ? "" : p.id + "/"))}</loc></url>`).join("\n")}\n</urlset>\n`);
+    write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${pages.map((p) => `<url><loc>${esc(site + dirOf(p))}</loc></url>`).join("\n")}\n</urlset>\n`);
     write("robots.txt", `User-agent: *\nAllow: /\nSitemap: ${site}sitemap.xml\n`);
   }
+  // llms.txt: every page with its summary, grouped by project, for agents that read the site
+  const abs = config.siteUrl ? config.siteUrl.replace(/\/$/, "") + config.base : config.base;
+  const lines = (pr) => pr.nav.flatMap((s) => s.pages).map((p) => `- [${p.meta.title}](${abs}${dirOf(p)}): ${p.meta.summary}`).join("\n");
+  write("llms.txt", `# ${config.project}\n\n> ${config.description ?? ""}\n${[hub, ...others].filter((pr) => pr.nav.length).map((pr) => `\n## ${pr.local ? config.project : `${pr.title}${release(pr) ? ` ${release(pr)}` : ""}`}\n\n${pr.local || !pr.summary ? "" : `${pr.summary}\n\n`}${lines(pr)}\n`).join("")}`);
   write("_headers", `${config.base}assets/*\n  Cache-Control: public, max-age=31536000, immutable\n${config.base}*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`);
   const count = (d) => readdirSync(d).reduce((n, f) => { const p = join(d, f); return n + (statSync(p).isDirectory() ? count(p) : 1); }, 0);
   return { out: config.siteOut, files: count(out) };

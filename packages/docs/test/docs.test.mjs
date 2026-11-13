@@ -4,12 +4,13 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, m
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseBody, plain } from "../src/parse.mjs";
+import { parseBody, plain, visit as visitAll } from "../src/parse.mjs";
 import { loadProject } from "../src/project.mjs";
 import { renderMarkdown, diffMarkdown, writeMarkdown } from "../src/build-md.mjs";
 import { buildSite } from "../src/build-site.mjs";
 import { texWriter, texEscape } from "../src/write-tex.mjs";
-import { convertBody } from "../src/import.mjs";
+import { convertBody, runImport } from "../src/import.mjs";
+import { loadConfig } from "../src/config.mjs";
 
 // the fixtures run in temporary folders, so point them at the design system release that npm run update:design downloaded
 process.env.JUPITER_DESIGN_DIR ??= join(dirname(fileURLToPath(import.meta.url)), "../../../vendor/design");
@@ -110,4 +111,58 @@ test("imported pages are on the site and in the PDF but never written to docs/",
   const p = load(d); assert.deepEqual(p.errors, []); assert.ok(p.pages.some((x) => x.id === "ext"));
   assert.ok(!renderMarkdown(p).has("docs/ext.md") && !renderMarkdown(p).has("docs/_imported/ext.md"));
   await buildSite(p); const html = readFileSync(join(d, "dist/site/ext/index.html"), "utf8"); assert.ok(html.includes("https://github.com/o/r/blob/v1/docs/ext.md"));
+});
+
+// A project that describes itself: its own docs.config.json and docs-src, read from a local folder (no network).
+function hubWithProject({ bad = false } = {}) {
+  const d = copy(); const pr = join(d, "ext/tool"); mkdirSync(join(pr, "docs-src/guides"), { recursive: true }); mkdirSync(join(pr, "docs-src/extras"), { recursive: true });
+  writeFileSync(join(pr, "package.json"), JSON.stringify({ version: "2.1.0" }));
+  writeFileSync(join(pr, "docs.config.json"), JSON.stringify({ project: "Tool", description: "A tool.", icon: "terminal", versionFrom: "package.json", glossary: { Gadget: "A part of the tool." }, siteUrl: "https://ignored.test" }));
+  writeFileSync(join(pr, "docs-src/index.md"), "---\ntitle: Tool\nsummary: Landing.\n---\n\nStart at [[guides/setup]].\n");
+  writeFileSync(join(pr, "docs-src/guides/setup.md"), `---\ntitle: Set up\nsummary: Steps.\norder: 1\n---\n\n## Install\n\nA [[term:Gadget]] and a [[term:Widget]]. See [more](../extras/more.md#part), [the hub](../../README.md) and [[one]].\n${bad ? "\n[[no-such-page]]\n" : ""}`);
+  writeFileSync(join(pr, "docs-src/guides/glossary.md"), "---\ntitle: Terms\nsummary: Terms.\n---\n\n::glossary\n");
+  writeFileSync(join(pr, "docs-src/extras/more.md"), "---\ntitle: More\nsummary: More.\n---\n\n## Part\n\nBack to [[guides/setup#install]].\n");
+  const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8")); cfg.sources = [{ path: "ext/tool" }]; cfg.siteUrl = "https://x.test";
+  writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg));
+  return d;
+}
+const importAll = async (d) => { const { config, root, errors } = loadConfig(join(d, "docs.config.json")); assert.deepEqual(errors, []); return runImport(config, root, () => {}); };
+
+test("project import: pages keep their folders, sections come from folders, links resolve inside the project first", async () => {
+  const d = hubWithProject(); assert.deepEqual(await importAll(d), { pages: 4, projects: 1 });
+  const p = load(d); assert.deepEqual(p.errors, []);
+  const tool = p.projects[1]; assert.deepEqual([tool.id, tool.title, tool.summary, tool.version, tool.icon], ["tool", "Tool", "A tool.", "2.1.0", "terminal"]);
+  assert.deepEqual(tool.nav.map((s) => [s.id, s.title, s.pages.map((x) => x.id)]), [["guides", "Guides", ["tool/guides/setup", "tool/guides/glossary"]], ["extras", "Extras", ["tool/extras/more"]]]);
+  assert.equal(p.nav.length, 1, "the hub keeps its own sections only");
+  const setup = p.pages.find((x) => x.id === "tool/guides/setup"); const refs = []; visitAll(setup.tree, (n) => { if (n.type === "xref") refs.push(n.id); });
+  assert.deepEqual(refs, ["tool/extras/more", "one"]);
+  assert.ok(!renderMarkdown(p).has("docs/tool/README.md") && [...renderMarkdown(p).keys()].every((k) => !k.includes("tool")));
+  await buildSite(p); const s = join(d, "dist/site");
+  const home = readFileSync(join(s, "index.html"), "utf8"); assert.ok(home.includes('<a href="tool/">Tool</a>') && home.includes("v2.1.0 · 3 pages"));
+  const land = readFileSync(join(s, "tool/index.html"), "utf8"); assert.ok(land.includes('href="guides/setup/"') && land.includes('aria-current="true">Tool</a>'));
+  const page = readFileSync(join(s, "tool/guides/setup/index.html"), "utf8");
+  assert.ok(page.includes('href="../glossary/#term-gadget"') && page.includes('href="../../../sub/two/#term-widget"'), "own glossary first, then the hub's");
+  assert.ok(page.includes('href="../../extras/more/#part"') && page.includes('href="../../../one/"') && page.includes('<a href="../../">Tool</a>'));
+  assert.ok(!page.includes('rel="prev"') && page.includes('rel="next"'), "previous and next stay inside the project");
+  assert.ok(readFileSync(join(s, "llms.txt"), "utf8").includes("## Tool v2.1.0\n\nA tool.\n\n- [Set up](https://x.test/tool/guides/setup/): Steps."));
+  assert.ok(readFileSync(join(s, "sitemap.xml"), "utf8").includes("<loc>https://x.test/tool/</loc>"));
+  const t = texWriter({ pages: p.pages, config: p.config }).document({ nav: p.nav, projects: p.projects, date: "1 Jan 2026" });
+  assert.ok(t.includes("\\jpintro{Tool}") && t.includes("\\jpdocsection{Tool: Guides}{Steps for one task each.}"));
+});
+test("a project with errors is left out with a warning; the rest of the site still builds", async () => {
+  const d = hubWithProject({ bad: true }); await importAll(d); const p = load(d);
+  assert.deepEqual(p.errors, []); assert.equal(p.projects.length, 1); assert.ok(p.pages.every((x) => !x.id.startsWith("tool")));
+  assert.ok(p.warnings[0].includes('project "tool"') && p.warnings.some((w) => w.includes('unknown page "no-such-page"')));
+});
+test("folders are sections: standard names get the standard title and order, a page outside a folder needs a section", () => {
+  const d = copy(); for (const f of ["reference/cli", "start/install", "zebra/z"]) { mkdirSync(join(d, "docs-src", dirname(f)), { recursive: true }); writeFileSync(join(d, "docs-src", `${f}.md`), "---\ntitle: T\nsummary: S.\n---\n\nText.\n"); }
+  let p = load(d); assert.deepEqual(p.errors, []); assert.deepEqual(p.nav.map((s) => s.title), ["Alpha", "Start", "Reference", "Zebra"]);
+  writeFileSync(join(d, "docs-src/loose.md"), "---\ntitle: T\nsummary: S.\n---\n\nText.\n"); mkdirSync(join(d, "docs-src/one")); writeFileSync(join(d, "docs-src/one/index.md"), "---\ntitle: T\nsummary: S.\nsection: a\n---\n");
+  p = load(d); assert.ok(p.errors.some((e) => e.includes("loose.md") && e.includes("section is required")) && p.errors.some((e) => e.includes("would both be published at /one")));
+});
+test("config: sources and discover are validated", () => {
+  const d = copy(); const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8"));
+  cfg.sources = [{ repo: "nope" }, { repo: "o/r", colour: 1 }, { repo: "o/r", sections: [{ id: "a", title: "A" }], files: { "x.md": { id: "x", title: "X", summary: "S.", section: "b" } } }]; cfg.discover = { exclude: [] };
+  writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg)); const e = loadConfig(join(d, "docs.config.json")).errors.join("\n");
+  for (const want of ["sources[0] needs repo", 'unknown key "colour"', 'section "b" is not in sources[2].sections', '"discover" needs owner']) assert.ok(e.includes(want), `missing: ${want}\n${e}`);
 });

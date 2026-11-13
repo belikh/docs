@@ -18,7 +18,8 @@ for (const m of ds.matchAll(/jupiter-docs build (--[a-z]+)/g)) if (!cli.includes
 for (const m of ds.matchAll(/npm run ([\w:.-]+)/g)) if (!(m[1] in scripts)) bad.push(`npm script not found: ${m[1]}`);
 for (const m of ds.matchAll(/(?:^|[\s`(-])(:{2,4})([a-z][a-z-]*)/gm)) if (!spec.DIRECTIVES.includes(m[2])) bad.push(`directive not in spec.mjs: ${m[2]}`);
 for (const d of spec.DIRECTIVES) if (!ds.includes(d)) bad.push(`directive not documented in the skill: ${d}`);
+for (const sec of spec.STANDARD_SECTIONS) if (!ds.includes(`| \`${sec.id}\` | ${sec.title} |`)) bad.push(`standard section not documented in the skill: ${sec.id}`);
 for (const k of Object.keys(spec.FRONT_MATTER)) if (!ds.includes(`\`${k}\``)) bad.push(`front matter key not documented in the skill: ${k}`);
-for (const k of ["project", "version", "versionFrom", "repo", "siteUrl", "base", "sections", "glossary", "hero", "sources"]) if (!ds.includes(k)) bad.push(`config key not documented in the skill: ${k}`);
+for (const k of ["project", "version", "versionFrom", "repo", "siteUrl", "base", "sections", "glossary", "hero", "sources", "discover", "description", "icon"]) if (!ds.includes(k)) bad.push(`config key not documented in the skill: ${k}`);
 if (bad.length) { console.error(`SKILL.md drift:\n  ${bad.join("\n  ")}`); process.exit(1); }
 console.log("The agent skill matches the generator.");

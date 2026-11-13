@@ -19,35 +19,33 @@ Documentation is written once, in `docs-src/`, as Markdown with a small header o
 ## Folder layout
 
 ```text title="docs-src and docs.config.json"
-docs.config.json        project name, version, repository, sections, glossary
+docs.config.json        project name, description, version, repository, glossary
 docs-src/
   index.md              landing page text
-  consuming.md          one page per file; the file name is the page id
-  guides/setup.md       nested ids use a slash: guides/setup
+  start/install.md      one page per file; the path is the page id: start/install
+  guides/backup.md      a folder is a section: this page is in Guides
 ```
 
-`docs.config.json` lists the sections in navigation order. Each page names its section in its header. Pages in a section are sorted by `order`, then by title.
+A page belongs to the section named by its folder. The folders `start`, `guides`, `reference`, `concepts` and `develop` have a fixed title and order (see [[adding-a-project#sections|Sections]]). A page that is not in a folder names its section in its header, and `docs.config.json` lists such sections under `sections`. Pages in a section are sorted by `order`, then by title.
 
 ```json title="docs.config.json"
 {
   "project": "My project",
   "versionFrom": "package.json",
   "repo": "https://github.com/me/my-project",
-  "siteUrl": "https://docs.example.org",
-  "sections": [{ "id": "use", "title": "Use", "summary": "Install and run it.", "icon": "terminal" }],
+  "description": "What the project does, in one sentence.",
   "glossary": { "Token": "A named design constant." }
 }
 ```
 
 ## Page header
 
-Every page starts with a YAML block. `title` and `summary` are required, and so is `section` on every page except `index.md`.
+Every page starts with a YAML block. `title` and `summary` are required. `section` is required only on a page that is not in a folder, except `index.md`.
 
 ```yaml title="docs-src/guides/setup.md"
 ---
 title: Set up the project
 summary: Install the tools and run the first build.
-section: use
 order: 20
 icon: terminal
 audience: developers
@@ -90,15 +88,15 @@ One-line directives start with two colons.
 Link to another page with its id, and to a heading with its anchor. Plain relative links to `.md` files also work.
 
 ````markdown title="Cross-references"
-See [[consuming]] or [[consuming#fonts|the fonts section]].
+See [[guides/setup]] or [[guides/setup#install|the install steps]].
 A [[term:Token]] is defined once in the glossary.
 
 :::see-also
-- [[recipes]]
+- [[reference/cli]]
 :::
 ````
 
-See [[consuming#fonts|the fonts section]] for the licensed typefaces. A [[term:Token]] is a named design constant.
+A page id names a page of the same project first. Start with a project id to link to another project: `[[design/consuming]]`. A [[term:Token]] is a named design constant.
 
 Links to files outside the source folder, such as `../AGENTS.md`, are checked against the repository and become repository links on the site. Raw HTML is not allowed.
 
@@ -119,7 +117,7 @@ jupiter-docs check              # validate the source
 jupiter-docs build              # write docs/*.md and dist/site
 jupiter-docs build --pdf        # also build the PDF (needs xelatex)
 jupiter-docs build --check      # fail when docs/*.md is out of date (CI)
-jupiter-docs import             # fetch the pages named in config sources (docs-src/_imported)
+jupiter-docs import             # fetch the projects named by sources and discover (docs-src/_imported)
 jupiter-docs init               # scaffold docs-src in a new project
 ```
 
@@ -131,23 +129,20 @@ jupiter-docs init               # scaffold docs-src in a new project
 
 ## Pages from other projects
 
-A project's own docs stay in its repository. `docs.config.json` lists them under `sources`, and `jupiter-docs import` fetches each file at the project's latest release tag, adds the header and writes it to `docs-src/_imported/`. The folder is not committed and the pages are not written to `docs/`. The site rebuilds every day and on request, so a new release shows up without a commit here.
-
-```json title="docs.config.json"
-"sources": [{
-  "repo": "belikh/design",
-  "ref": "latest",
-  "files": {
-    "docs/consuming.md": { "id": "consuming", "title": "Depending on the design system", "summary": "How a project takes the design system as a dependency.", "section": "use", "order": 10 }
-  }
-}]
-```
-
-`ref` is a tag, a branch or `latest`. The import removes the file's first `#` title and a leading comment, turns links to other listed files into page links, and points every other relative link at the repository. Adding another project is a config change: no code.
+A project's pages stay in its repository. `jupiter-docs import` fetches every project named by `sources` and `discover` in `docs.config.json` at its latest release and writes the pages to `docs-src/_imported/<project id>/`. The folder is not committed and the pages are not written to `docs/`. [[adding-a-project]] has the steps and the keys.
 
 ## The design system
 
 The site and the PDF take their colours, fonts, graphics and LaTeX classes from the latest `belikh/design` release. `npm run update:design` downloads it into `vendor/design`, which is not committed, and the workflows do the same before every build. When the design system changes, the next build looks different with no change in this repository.
+
+## What a good page has
+
+- A title that names the task or the thing, and a one-sentence summary that says what the reader gets.
+- The command or the result in the first screen. Steps are a numbered list, one action each, with the command to copy.
+- Every option, flag and file in a table with its default. A reader should not need the source code.
+- One working example that can be pasted and run, with the output it prints.
+- The errors a reader will meet, quoted exactly, each with its cause and its fix.
+- Links to the next page a reader needs, in a `:::see-also` block.
 
 ## Writing rules
 
@@ -160,7 +155,6 @@ Graphics come only from `@belikh/jupiter-graphics`. If the set lacks one, add it
 ::graphic rule/loops
 
 :::see-also
-- [[consuming]]
-- [[recipes]]
+- [[adding-a-project]]
 - [[glossary]]
 :::

@@ -1,6 +1,6 @@
 ---
 name: jupiter-docs
-description: How to write and publish documentation for jupiter.au projects. Use whenever you create, edit, move or delete documentation, a guide, a how-to, an API or CLI reference, a handbook, the docs/ folder, the docs site (docs.jupiter.au) or a PDF manual, even for a one-paragraph change. Documentation is ALWAYS written as docs-src input to jupiter-docs, which generates the site, the docs/*.md files and the PDF; never hand-edit those outputs. Covers the source format, the directives, how to add a graphic, the commands and the writing rules.
+description: How to write and publish documentation for jupiter.au projects. Use whenever you create, edit, move or delete documentation, a guide, a how-to, an API or CLI reference, a handbook, the docs/ folder, the docs site (docs.jupiter.au) or a PDF manual, even for a one-paragraph change. Documentation is ALWAYS written as docs-src input to jupiter-docs, which generates the site, the docs/*.md files and the PDF; never hand-edit those outputs. Also use when a project needs documentation for the first time or should appear on docs.jupiter.au: the pages stay in the project's repository and the site imports them. Covers the source format, sections, the directives, how to register a project, how to add a graphic, the commands and the writing rules.
 ---
 
 # Documentation with jupiter-docs
@@ -24,11 +24,37 @@ The visual rules (type, colour, space, graphics) are in `DESIGN.md` in the `jupi
 3. `jupiter-docs check` validates the source and names the file and line of every problem.
 4. `jupiter-docs build` writes `docs/*.md` and `dist/site`. Commit `docs-src/` and the regenerated `docs/*.md` together. CI runs `jupiter-docs build --check` and fails when a generated file is stale.
 5. `jupiter-docs build --pdf` builds the PDF; it needs `xelatex` and `rsvg-convert`.
-6. For a new project run `jupiter-docs init`, which creates `docs.config.json`, `docs-src/index.md` and a first page.
+6. For a new project run `jupiter-docs init`, which creates `docs.config.json`, `docs-src/index.md` and a first page in the `start` folder. Then follow "Put a project on docs.jupiter.au" below.
+
+## Put a project on docs.jupiter.au
+
+docs.jupiter.au shows every project. A project's pages stay in the project's repository; `belikh/docs` holds no copy and imports them before each build (`jupiter-docs import`, daily and on every push there).
+
+1. In the project's repository, write `docs.config.json` (`project`, `description`, an `icon`, `versionFrom`, `repo`, a `glossary` if the pages use terms) and the pages in `docs-src/`. Run `jupiter-docs check`, then commit both to the default branch.
+2. A public repository of `belikh` is now registered: the `discover` key in `docs.config.json` of `belikh/docs` finds every such repository that has a `docs.config.json` at its root. Nothing is edited in `belikh/docs`.
+3. A repository of another owner, or one that needs a fixed branch or another id, is registered by one entry in `sources` of `belikh/docs`: `{ "repo": "owner/name" }`, with optional `ref`, `id`, `title`, `summary` and `icon`.
+4. The site reads the project's newest release, or its default branch when there is no release or the release has no `docs.config.json`. Pages appear at `/<project id>/<path of the file>/`; the id is the repository name in lower case.
+5. To publish straight after a release, the project's release workflow sends a `repository_dispatch` event of type `docs-changed` to `belikh/docs`.
+
+A project whose pages fail `jupiter-docs check` is left out of the site with a warning in the build log, so run the check in the project's own CI. Private repositories, forks and archived repositories are not discovered. `docs/adding-a-project.md` in `belikh/docs` is the full reference.
+
+## Sections
+
+A folder in `docs-src/` is a section; the page's `section` key is only needed for a page that is not in a folder. Use these five folder names in every project. They have a fixed title, summary, icon and order, so each project is laid out the same way:
+
+| Folder | Title | What goes in it |
+| --- | --- | --- |
+| `start` | Start | Install and first run. Often one page. |
+| `guides` | Guides | One task per page, as numbered steps with commands to copy. |
+| `reference` | Reference | Every command, option, file format and API, in tables with defaults. |
+| `concepts` | Concepts | How it works and why it is built this way. |
+| `develop` | Develop | Build, test and release. |
+
+Another folder name becomes a section titled after the folder. List `sections` in `docs.config.json` only when a project needs its own titles or order. When you add a feature, add or change its guide and its reference entry in the same commit, and put a new page in the folder that matches its kind before inventing a section.
 
 ## Source format
 
-`docs.config.json` (project root) holds `project`, `version` or `versionFrom`, `repo`, `siteUrl`, `base`, `sections` (in navigation order, each `{ id, title, summary, icon }`), `glossary` (term to definition) and `hero` (a spot graphic for the landing page). Unknown keys are errors.
+`docs.config.json` (project root) holds `project`, `description`, `icon` (shown on the project's card), `version` or `versionFrom`, `repo`, `siteUrl`, `base`, `sections` (optional, in navigation order, each `{ id, title, summary, icon }`), `glossary` (term to definition) and `hero` (a spot graphic for the landing page). A site that shows other projects also has `sources` and `discover`. Unknown keys are errors.
 
 Each page starts with a YAML block:
 
@@ -36,7 +62,7 @@ Each page starts with a YAML block:
 | --- | --- |
 | `title` | Required. The page title (the body starts at `##`). |
 | `summary` | Required. One sentence; shown under the title, in search and on cards. |
-| `section` | Required except on `index.md`. An id from `sections`. |
+| `section` | A section id. Default: the name of the page's first folder. Required on a page that is not in a folder, except `index.md`. |
 | `order` | Number. Position in the section (default 100). |
 | `icon` | A name from the icon tier of the graphics set, for example `home`. |
 | `audience` | `users`, `developers`, `agents` or `maintainers`. |
@@ -55,20 +81,30 @@ Block directives start with colons and end with a line of colons; use four colon
 
 Inline and link syntax:
 
-- `[[page-id]]`, `[[page-id#anchor|link text]]`: a link to another page or heading. Relative links to `.md` files also resolve.
-- `[[term:Name]]`: a glossary term that links to the glossary page.
+- `[[page-id]]`, `[[page-id#anchor|link text]]`: a link to another page or heading. The id is the file's path without `.md`, and names a page of the same project first. On docs.jupiter.au, `[[design/consuming]]` links to a page of another project and `[[design]]` to its landing page. Relative links to `.md` files also resolve.
+- `[[term:Name]]`: a glossary term that links to the glossary page. A project's own `glossary` is looked up first, then the site's.
 - Code fences take a language and an optional title: ` ```sh title="Install" `. Always give a language; use `text` for plain output.
 - Tables are plain Markdown tables with no merged cells. Keep cells short; put long text below the table.
 
 ## What each output looks like
 
-- Site: the app's look from the tokens and components CSS, SGI fonts, light and dark, a left navigation by section, an on-page contents, previous and next links, search and a print style.
+- Site: the app's look from the tokens and components CSS, SGI fonts, light and dark, a home page with a card per project, a landing page per project, a left navigation by section, an on-page contents, previous and next links, search across all projects, a print style and an `llms.txt` that lists every page with its summary.
 - `docs/*.md`: plain GitHub Markdown. Callouts become GitHub alerts, graphics become light/dark `<picture>` blocks, page links become relative `.md` links.
 - PDF: `jupiter-docs.cls` in `latex/` of `belikh/docs`, which extends `jupiter.sty` from the design system's LaTeX bundle, with a cover, running header, numbered sections and callout boxes.
 
 ## Add a graphic
 
 Graphics come only from `@belikh/jupiter-graphics`: no emoji, no other icon sets, no screenshots as decoration. If the set lacks what you need, add it to the graphics package of `belikh/design` first (see `jupiter-design-system`); after its next release use its `tier/name`. `jupiter-docs check` fails on an unknown name.
+
+## What a good page has
+
+- A title that names the task or the thing, and a summary that says in one sentence what the reader gets.
+- The command or the result in the first screen. Steps are a numbered list, one action each, with the command to copy and the output it prints.
+- Every option, flag, environment variable and file in a table with its default. Check each against the code before you write it down.
+- One example that can be pasted and run as it is.
+- The errors a reader will meet, quoted exactly, each with its cause and its fix.
+- A `:::see-also` block with the next page a reader needs.
+- `status: draft` until the steps have been run from a clean checkout.
 
 ## Writing rules
 
@@ -80,4 +116,4 @@ Same voice as the `github-readme` skill: plain words, short sentences, say what 
 - `docs-src` and `docs.config.json`: the site's source. `docs/writing-documentation.md` is the full format reference.
 - `latex/jupiter-docs.cls`: the PDF class.
 - `scripts/update-design.mjs`: downloads the design system release.
-- Pages of other projects are fetched by `jupiter-docs import` from the `sources` list in `docs.config.json` into `docs-src/_imported`; the front matter key `source` marks them. Do not edit them here: change the file in its own repository and release.
+- Pages of other projects are fetched by `jupiter-docs import` into `docs-src/_imported/<project id>/`, with the list of projects in `projects.json` beside them; the front matter key `source` marks them. Do not edit them in `belikh/docs`: change the file in its own repository.

@@ -3,9 +3,11 @@ import { posix } from "node:path";
 import { CALLOUTS } from "./spec.mjs";
 import { plain, slug } from "./parse.mjs";
 import { graphicSvg } from "./resolve.mjs";
+import { findTerm } from "./source.mjs";
 
 export const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-export const pageDir = (id) => (id === "index" ? "" : id);
+/** The folder a page is published in: index pages take the folder itself ("index" is "", "design/index" is "design"). */
+export const pageDir = (id) => (id === "index" ? "" : id.replace(/\/index$/, ""));
 /** Relative URL from the page `from` (or null for a root-absolute URL, used by 404.html) to a site path such as "consuming/" or "assets/x.css". */
 export function makeUrl(base, from) {
   return (to) => {
@@ -15,11 +17,10 @@ export function makeUrl(base, from) {
     return (rel + file) || "./";
   };
 }
-export const pageHref = (url, id) => url(id === "index" ? "" : `${id}/`);
+export const pageHref = (url, id) => url(pageDir(id) ? `${pageDir(id)}/` : "");
 
 export function htmlWriter({ pages, config, root }) {
   const byId = new Map(pages.map((p) => [p.id, p]));
-  const glossaryPage = pages.find((p) => p.tree.some((b) => b.type === "glossary"));
   const repoFile = (page, href) => {
     if (!config.repo) return href; const [path, hash] = href.split("#"); const target = posix.normalize(posix.join(posix.dirname(page.file), path));
     return target.startsWith("..") ? href : `${config.repo}/blob/${config.repoBranch}/${target}${hash ? `#${hash}` : ""}`;
@@ -40,7 +41,7 @@ export function htmlWriter({ pages, config, root }) {
         }
         case "image": return `<img src="${esc(n.src)}" alt="${esc(n.alt)}" loading="lazy">`;
         case "xref": { const t = byId.get(n.id); return `<a href="${esc(pageHref(url, n.id) + (n.anchor ? `#${n.anchor}` : ""))}">${n.children ? inl(n.children, page, url) : esc(n.text || t?.meta.title || n.id)}</a>`; }
-        case "term": { const def = config.glossary[Object.keys(config.glossary).find((k) => k.toLowerCase() === n.key)] ?? ""; return glossaryPage ? `<a class="dx-term" href="${esc(pageHref(url, glossaryPage.id))}#term-${slug(n.key)}" title="${esc(def)}">${esc(n.text)}</a>` : esc(n.text); }
+        case "term": { const t = findTerm(page, n.key); return t?.page ? `<a class="dx-term" href="${esc(pageHref(url, t.page.id))}#term-${slug(n.key)}" title="${esc(t.def)}">${esc(n.text)}</a>` : esc(n.text); }
         default: return "";
       }
     }).join("");
@@ -67,7 +68,7 @@ export function htmlWriter({ pages, config, root }) {
         const svg = graphicSvg(n.ref, root); const tier = n.ref.split("/")[0]; if (!svg) return "";
         return `<figure class="dx-graphic dx-graphic--${tier}"${n.alt ? ` role="img" aria-label="${esc(n.alt)}"` : ""}>${svg}</figure>`;
       }
-      case "glossary": return `<dl class="dx-glossary">\n${Object.entries(config.glossary).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `<dt id="term-${slug(k)}">${esc(k)}</dt><dd>${esc(v)}</dd>`).join("\n")}\n</dl>`;
+      case "glossary": return `<dl class="dx-glossary">\n${Object.entries(page.project.glossary).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `<dt id="term-${slug(k)}">${esc(k)}</dt><dd>${esc(v)}</dd>`).join("\n")}\n</dl>`;
       default: return "";
     }
   }

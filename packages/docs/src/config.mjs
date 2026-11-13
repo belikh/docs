@@ -5,6 +5,9 @@ import { CONFIG_KEYS } from "./spec.mjs";
 export const DEFAULT_GRAPHICS_URL = "https://raw.githubusercontent.com/belikh/design/latest/packages/github/graphics/{tier}/{name}-{theme}.svg";
 const DEFAULTS = { src: "docs-src", mdOut: "docs", siteOut: "dist/site", pdfOut: "dist", base: "/", repoBranch: "main", sections: [], glossary: {}, graphicsUrl: DEFAULT_GRAPHICS_URL };
 
+const REPO = /^[\w.-]+\/[\w.-]+$/;
+const SOURCE_KEYS = ["repo", "path", "ref", "id", "title", "summary", "icon", "sections", "files"];
+
 /** Load docs.config.json. Returns { config, root, errors }. */
 export function loadConfig(file) {
   const path = resolve(file); const root = dirname(path); const errors = [];
@@ -18,10 +21,25 @@ export function loadConfig(file) {
   if (c.sources !== undefined) {
     if (!Array.isArray(c.sources)) errors.push(`${file}: "sources" must be a list`);
     else c.sources.forEach((src, i) => {
-      if (!src || !/^[\w.-]+\/[\w.-]+$/.test(src.repo ?? "")) errors.push(`${file}: sources[${i}].repo must be owner/name`);
-      else if (!src.files || typeof src.files !== "object" || !Object.keys(src.files).length) errors.push(`${file}: sources[${i}].files needs at least one path`);
-      else for (const [path, m] of Object.entries(src.files)) if (!m?.id || !m.title || !m.summary || !m.section) errors.push(`${file}: sources[${i}].files["${path}"] needs id, title, summary and section`);
+      const at = `${file}: sources[${i}]`;
+      if (!src || typeof src !== "object") { errors.push(`${at} must be an object`); return; }
+      for (const k of Object.keys(src)) if (!SOURCE_KEYS.includes(k)) errors.push(`${at}: unknown key "${k}" (known: ${SOURCE_KEYS.join(", ")})`);
+      if (src.path !== undefined ? typeof src.path !== "string" : !REPO.test(src.repo ?? "")) errors.push(`${at} needs repo (owner/name) or path (a local folder)`);
+      if (src.id !== undefined && !/^[a-z0-9][a-z0-9-]*$/.test(src.id)) errors.push(`${at}.id must be lower case letters, digits and -`);
+      if (src.sections !== undefined && (!Array.isArray(src.sections) || src.sections.some((s) => !s || typeof s.id !== "string" || typeof s.title !== "string"))) errors.push(`${at}.sections must be a list of { id, title }`);
+      if (src.files === undefined) return;
+      if (!src.files || typeof src.files !== "object" || !Object.keys(src.files).length) { errors.push(`${at}.files needs at least one path`); return; }
+      const known = Array.isArray(src.sections) ? src.sections.map((s) => s?.id) : [];
+      for (const [path, m] of Object.entries(src.files)) {
+        if (!m?.id || !m.title || !m.summary || !m.section) errors.push(`${at}.files["${path}"] needs id, title, summary and section`);
+        else if (!known.includes(m.section)) errors.push(`${at}.files["${path}"]: section "${m.section}" is not in sources[${i}].sections`);
+      }
     });
+  }
+  if (c.discover !== undefined) {
+    const d = c.discover;
+    if (!d || typeof d !== "object" || !/^[\w.-]+$/.test(d.owner ?? "")) errors.push(`${file}: "discover" needs owner (a GitHub user or organisation)`);
+    else if (d.exclude !== undefined && (!Array.isArray(d.exclude) || d.exclude.some((x) => typeof x !== "string"))) errors.push(`${file}: "discover.exclude" must be a list of repository names`);
   }
   const ids = c.sections.map((s) => s.id); ids.forEach((id, i) => { if (ids.indexOf(id) !== i) errors.push(`${file}: duplicate section id "${id}"`); });
   if (!c.base.startsWith("/") || !c.base.endsWith("/")) errors.push(`${file}: "base" must start and end with / (got "${c.base}")`);

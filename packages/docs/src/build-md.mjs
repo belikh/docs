@@ -5,7 +5,7 @@ import { MARKER, graphicUrlFor, mdWriter } from "./write-md.mjs";
 /** Map of output path (relative to project root, posix) -> contents. */
 export function renderMarkdown(project) {
   const { config, pages } = project; const w = mdWriter({ pages, config, graphicUrl: graphicUrlFor(config, config.mdOut) });
-  return new Map(pages.filter((p) => !p.meta.source).map((p) => [`${config.mdOut}/${w.file(p)}`, w.render(p)]));
+  return new Map(pages.filter((p) => p.project.local && !p.meta.source).map((p) => [`${config.mdOut}/${w.file(p)}`, w.render(p)]));
 }
 
 const walk = (d) => (existsSync(d) ? readdirSync(d).sort().flatMap((n) => { const p = join(d, n); return statSync(p).isDirectory() ? walk(p) : [p]; }) : []);

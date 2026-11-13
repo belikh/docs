@@ -32,7 +32,7 @@ function svgToPdf(svg, outFile, colour) {
 }
 
 export async function buildPdf(project, { date } = {}) {
-  const { config, root, pages, nav } = project;
+  const { config, root, pages, nav, projects } = project;
   const latex = findLatex(project); if (!latex) throw new Error("jupiter.sty not found: run npm run update:design (it downloads jupiter-latex.tgz into vendor/design/latex), or set latexDir / JUPITER_LATEX_DIR to an unpacked jupiter-latex.tgz");
   if (!latex.fontDir || !latex.graphicsDir) throw new Error(`${latex.dir}: the bundle has no fonts/ or graphics/; the PDF must use SGI Text, SGI Alt and JetBrains Mono`);
   if (!need("xelatex")) throw new Error("xelatex not found (install TeX Live: texlive-xetex texlive-latex-extra)");
@@ -48,7 +48,7 @@ export async function buildPdf(project, { date } = {}) {
   const d = date ?? (process.env.SOURCE_DATE_EPOCH ? new Date(Number(process.env.SOURCE_DATE_EPOCH) * 1000) : new Date());
   const dateText = d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const w = texWriter({ pages, config }); const name = config.id;
-  writeFileSync(join(work, `${name}.tex`), w.document({ nav, date: dateText, version: config.version ? `v${config.version}` : "" }));
+  writeFileSync(join(work, `${name}.tex`), w.document({ nav, projects, date: dateText, version: config.version ? `v${config.version}` : "" }));
   const fonts = latex.fontDir ? latex.fontDir + "/" : "";
   const env = { ...process.env, TEXINPUTS: `.:${work}:${latex.ownDir}:${latex.classDir}:${latex.graphicsDir}:${tokensDir}:`, max_print_line: "10000", SOURCE_DATE_EPOCH: process.env.SOURCE_DATE_EPOCH ?? String(Math.floor(d.getTime() / 1000)) };
   let log = "";

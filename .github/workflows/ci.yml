@@ -22,8 +22,12 @@ jobs:
       - run: npm run update:design   # the latest belikh/design release into vendor/design (not committed)
       - run: npm run lint            # skill/SKILL.md matches the generator
       - run: npm test
-      - run: npm run check           # import from the other projects, validate, docs/*.md is current
-      - run: npm run build:site
+      - name: Import the projects, validate, check docs/*.md is current and build the site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # the import lists the owner's repositories through the API (discover)
+        run: |
+          npm run check
+          npm run build:site
   pdf:
     runs-on: ubuntu-latest
     steps:
@@ -40,6 +44,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends texlive-xetex texlive-latex-recommended texlive-latex-extra \
             texlive-pictures texlive-fonts-recommended poppler-utils librsvg2-bin
       - name: Build the PDF (fails on a missing glyph) and check its fonts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build:pdf   # scripts/check-pdf-fonts.mjs: only SGI Text, SGI Alt and JetBrains Mono may be embedded
       - run: pdftoppm -r 70 -f 1 -l 1 -png -singlefile dist/jupiter-docs.pdf dist/jupiter-docs
       - uses: actions/upload-artifact@v4

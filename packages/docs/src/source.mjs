@@ -1,8 +1,9 @@
-// Reads the source folder into pages: { id, file, dir, meta, tree, lineBase }, then resolves page links.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+// Reads the source folder into pages and projects, then resolves page links.
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
 import YAML from "yaml";
 import { parseBody, visit, plain } from "./parse.mjs";
+import { STANDARD_SECTIONS } from "./spec.mjs";
 
 const walk = (dir) => readdirSync(dir).sort().flatMap((n) => { const p = join(dir, n); return statSync(p).isDirectory() ? walk(p) : p.endsWith(".md") ? [p] : []; });
 
@@ -13,33 +14,67 @@ export function splitFrontMatter(text) {
   catch (e) { return { meta: {}, body: text.slice(m[0].length), lineBase: m[0].split("\n").length - 1, error: `front matter is not valid YAML: ${e.message.split("\n")[0]}` }; }
 }
 
-// Pages fetched by `jupiter-docs import` live in docs-src/_imported/ and keep their own ids (the folder name is dropped).
-export function loadPages(root, config) {
+const titleCase = (s) => s.replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+
+/** A glossary term for a page: its own project's glossary first, then the hub's. { name, def, page, owner } or null. */
+export function findTerm(page, key) {
+  for (const pr of new Set([page.project, page.project.hub])) {
+    const name = Object.keys(pr.glossary).find((k) => k.toLowerCase() === key);
+    if (name) return { name, def: pr.glossary[name], page: pr.glossaryPage, owner: pr };
+  }
+  return null;
+}
+
+// Projects. The pages of the source folder belong to the hub project (id ""). `jupiter-docs import` writes the pages of every
+// other project to docs-src/_imported/<project id>/ and lists the projects in docs-src/_imported/projects.json. A page id is
+// its path below docs-src without _imported/, so the pages of project "design" are design/consuming, design/index and so on.
+// Returns { pages, projects }; projects[0] is the hub. `skip` is a set of project ids to leave out.
+export function loadPages(root, config, skip = new Set()) {
   const srcDir = join(root, config.src); const pages = [];
+  const manifest = join(srcDir, "_imported/projects.json");
+  const listed = existsSync(manifest) ? JSON.parse(readFileSync(manifest, "utf8")) : [];
+  const make = (p) => ({ ...p, sections: (p.sections ?? []).map((s) => ({ ...s })), glossary: p.glossary ?? {}, pages: [] });
+  const hub = make({ id: "", title: config.project, summary: config.description ?? "", sections: config.sections, glossary: config.glossary, local: true });
+  const projects = [hub, ...listed.filter((p) => !skip.has(p.id)).map(make)];
+  const byPid = new Map(projects.map((p) => [p.id, p]));
+  for (const pr of projects) pr.hub = hub;
   for (const f of walk(srcDir)) {
-    const rel = relative(srcDir, f).split(sep).join("/"); const { meta, body, lineBase, error } = splitFrontMatter(readFileSync(f, "utf8"));
-    const id = rel.replace(/\.md$/, "").replace(/^_imported\//, ""); const tree = parseBody(body, lineBase);
-    pages.push({ id, file: `${config.src}/${rel}`, rel, abs: f, meta, tree, lineBase, fmError: error, headings: [] });
+    const rel = relative(srcDir, f).split(sep).join("/"); const id = rel.replace(/\.md$/, "").replace(/^_imported\//, "");
+    const first = rel.startsWith("_imported/") ? id.split("/")[0] : ""; if (first && skip.has(first)) continue;
+    const project = byPid.get(first) ?? hub; const local = project.id ? id.slice(project.id.length + 1) : id;
+    const { meta, body, lineBase, error } = splitFrontMatter(readFileSync(f, "utf8")); const tree = parseBody(body, lineBase);
+    const page = { id, local, project, file: `${config.src}/${rel}`, rel, abs: f, meta, tree, lineBase, fmError: error, headings: [] };
+    // a page in a folder belongs to the section with the folder's name; a folder that is not a declared section becomes one
+    if (meta.section === undefined && local.includes("/")) {
+      const sid = local.split("/")[0]; meta.section = sid;
+      if (!project.sections.some((s) => s.id === sid)) project.sections.push({ ...(STANDARD_SECTIONS.find((s) => s.id === sid) ?? { id: sid, title: titleCase(sid) }), auto: true });
+    }
+    pages.push(page); project.pages.push(page);
   }
   pages.sort((a, b) => a.id.localeCompare(b.id));
   const byId = new Map(pages.map((p) => [p.id, p]));
+  const std = (s) => { const i = STANDARD_SECTIONS.findIndex((x) => x.id === s.id); return i < 0 ? STANDARD_SECTIONS.length : i; };
+  for (const pr of projects) {
+    const declared = pr.sections.filter((s) => !s.auto); const auto = pr.sections.filter((s) => s.auto).sort((a, b) => std(a) - std(b) || a.id.localeCompare(b.id));
+    pr.sections = [...declared, ...auto];
+    pr.pages.sort((a, b) => (a.meta.order ?? 100) - (b.meta.order ?? 100) || String(a.meta.title).localeCompare(String(b.meta.title)));
+    pr.index = pr.pages.find((p) => p.local === "index");
+    pr.glossaryPage = pr.pages.find((p) => { let hit = false; visit(p.tree, (n) => { if (n.type === "glossary") hit = true; }); return hit; });
+    pr.nav = pr.sections.map((s) => ({ ...s, pages: pr.pages.filter((p) => p !== pr.index && p.meta.section === s.id) })).filter((s) => s.pages.length);
+  }
+  // [[id]] names a page of the same project first, then a page of the whole site; a project id alone names its landing page
+  const resolveId = (p, id) => { const pre = p.project.id ? `${p.project.id}/` : ""; return [pre + id, `${pre}${id}/index`, id, `${id}/index`].find((c) => byId.has(c)) ?? id; };
   for (const p of pages) {
     visit(p.tree, (n) => { if (n.type === "heading") p.headings.push({ depth: n.depth, id: n.id, text: plain(n.children) }); });
-    // `[text](other.md#anchor)` links between pages become the same xref node as [[other]]
     visit(p.tree, (n) => {
+      if (n.type === "xref") { n.id = resolveId(p, n.id); return; }
+      // `[text](other.md#anchor)` links between pages become the same xref node as [[other]]
       if (n.type !== "link" || /^[a-z][a-z0-9+.-]*:|^#|^\//i.test(n.href)) return;
       const [path, anchor = ""] = n.href.split("#"); if (!path.endsWith(".md")) return;
-      const target = posix.normalize(posix.join(posix.dirname(p.rel), path)).replace(/\.md$/, "");
+      const target = posix.normalize(posix.join(posix.dirname(p.id), path)).replace(/\.md$/, "");
       if (byId.has(target)) { n.type = "xref"; n.id = target; n.anchor = anchor; n.text = ""; }
       else if (!target.startsWith("..")) n.broken = target;
     });
   }
-  return pages;
-}
-
-export function sortedNav(pages, config) {
-  const secs = config.sections.map((s) => ({ ...s, pages: [] }));
-  for (const p of pages) { if (p.id === "index") continue; const s = secs.find((x) => x.id === p.meta.section); if (s) s.pages.push(p); }
-  for (const s of secs) s.pages.sort((a, b) => (a.meta.order ?? 100) - (b.meta.order ?? 100) || String(a.meta.title).localeCompare(String(b.meta.title)));
-  return secs.filter((s) => s.pages.length);
+  return { pages, projects };
 }

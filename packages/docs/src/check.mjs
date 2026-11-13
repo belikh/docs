@@ -3,29 +3,35 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { AUDIENCES, FRONT_MATTER, STATUSES } from "./spec.mjs";
 import { visit, plain } from "./parse.mjs";
+import { findTerm } from "./source.mjs";
+import { pageDir } from "./write-html.mjs";
 import { graphicsSet } from "./resolve.mjs";
 
 /** @returns {{errors: string[], warnings: string[]}} */
-export function checkProject({ config, root, pages }) {
+export function checkProject({ config, root, pages, projects }) {
   const errors = []; const warnings = [];
   const err = (p, line, msg) => errors.push(`${p.file}:${line || 1}: ${msg}`);
   const warn = (p, line, msg) => warnings.push(`${p.file}:${line || 1}: ${msg}`);
   const g = graphicsSet(root); const byId = new Map(pages.map((p) => [p.id, p]));
   if (!g) warnings.push("@belikh/jupiter-graphics not found: graphic names are not checked");
-  const sectionIds = new Set(config.sections.map((s) => s.id));
-  const glossaryPage = pages.find((p) => { let hit = false; visit(p.tree, (n) => { if (n.type === "glossary") hit = true; }); return hit; });
-  const termKeys = new Set(Object.keys(config.glossary).map((k) => k.toLowerCase())); let termsUsed = false;
-  for (const s of config.sections) if (g && s.icon && !g.names.has(`icon/${s.icon}`)) errors.push(`docs.config.json: section "${s.id}": unknown icon "${s.icon}"`);
+  const where = (pr) => (pr.local ? "docs.config.json" : `${config.src}/_imported/${pr.id}`); const noGlossaryPage = new Set();
+  for (const pr of projects) {
+    for (const s of pr.sections) if (g && s.icon && !g.names.has(`icon/${s.icon}`)) errors.push(`${where(pr)}: section "${s.id}": unknown icon "${s.icon}"`);
+    if (g && pr.icon && !g.names.has(`icon/${pr.icon}`)) errors.push(`${where(pr)}: unknown icon "${pr.icon}"`);
+    if (!pr.local && pr.id && projects[0].pages.some((p) => p.id === pr.id || p.id.startsWith(`${pr.id}/`))) errors.push(`${where(pr)}: the project id "${pr.id}" is also a page or folder of ${config.src}; set "id" on its entry in sources`);
+  }
   if (config.hero && g && !g.names.has(config.hero)) errors.push(`docs.config.json: hero "${config.hero}" is not a graphic (use tier/name, for example spot/summit)`);
+  const paths = new Map();
   if (!pages.some((p) => p.id === "index")) warnings.push(`${config.src}/index.md: missing; the site has no landing text`);
   for (const p of pages) {
-    const m = p.meta;
+    const m = p.meta; const sectionIds = new Set(p.project.sections.map((s) => s.id));
+    const dir = pageDir(p.id); if (paths.has(dir)) err(p, 1, `this page and ${paths.get(dir).file} would both be published at /${dir}`); else paths.set(dir, p);
     if (p.fmError) err(p, 1, p.fmError);
     for (const k of Object.keys(m)) if (!(k in FRONT_MATTER)) err(p, 1, `unknown front matter key "${k}" (known: ${Object.keys(FRONT_MATTER).join(", ")})`);
     if (typeof m.title !== "string" || !m.title.trim()) err(p, 1, "front matter: title is required");
     if (typeof m.summary !== "string" || !m.summary.trim()) err(p, 1, "front matter: summary is required (one sentence)");
-    if (p.id !== "index") {
-      if (!m.section) err(p, 1, "front matter: section is required");
+    if (p !== p.project.index) {
+      if (!m.section) err(p, 1, "front matter: section is required for a page that is not in a folder (or move the page into a folder such as guides/)");
       else if (!sectionIds.has(m.section)) err(p, 1, `front matter: unknown section "${m.section}" (known: ${[...sectionIds].join(", ") || "none, add sections to docs.config.json"})`);
     }
     if (m.order !== undefined && typeof m.order !== "number") err(p, 1, "front matter: order must be a number");
@@ -49,9 +55,9 @@ export function checkProject({ config, root, pages }) {
           else if (g && !g.names.has(n.ref)) err(p, n.line, `unknown graphic "${n.ref}" (see the manifest of @belikh/jupiter-graphics)`);
           break;
         }
-        case "glossary": if (!termKeys.size) err(p, n.line, "::glossary used but docs.config.json has no glossary"); break;
+        case "glossary": if (!Object.keys(p.project.glossary).length) err(p, n.line, "::glossary used but docs.config.json has no glossary"); break;
         case "codeblock": if (!n.lang) warn(p, n.line, "code block without a language (use text for plain output)"); break;
-        case "term": termsUsed = true; if (!termKeys.has(n.key)) err(p, 0, `unknown glossary term "${n.text}" (add it to glossary in docs.config.json)`); break;
+        case "term": { const t = findTerm(p, n.key); if (!t) err(p, 0, `unknown glossary term "${n.text}" (add it to glossary in docs.config.json)`); else if (!t.page) noGlossaryPage.add(t.owner); break; }
         case "xref": {
           const t = byId.get(n.id);
           if (!t) err(p, 0, `link to unknown page "${n.id}"`);
@@ -69,7 +75,7 @@ export function checkProject({ config, root, pages }) {
       }
     });
   }
-  if (termsUsed && !glossaryPage) errors.push(`${config.src}: glossary terms are used but no page contains ::glossary`);
-  for (const s of config.sections) if (!pages.some((p) => p.meta.section === s.id)) warnings.push(`docs.config.json: section "${s.id}" has no pages`);
-  return { errors, warnings, glossaryPage };
+  for (const pr of noGlossaryPage) errors.push(`${pr.local ? config.src : where(pr)}: glossary terms are used but no page contains ::glossary`);
+  for (const pr of projects) for (const s of pr.sections) if (!pr.nav.some((x) => x.id === s.id)) warnings.push(`${where(pr)}: section "${s.id}" has no pages`);
+  return { errors, warnings };
 }

@@ -6,7 +6,7 @@ const HELP = `jupiter-docs: one Markdown source, three outputs (site, repo Markd
   jupiter-docs check [--strict]            validate the source (exit 1 on errors; --strict also on warnings)
   jupiter-docs build [--md] [--site] [--pdf]   build outputs (default: --md --site)
   jupiter-docs build --check               fail when the generated Markdown is out of date
-  jupiter-docs import                      fetch the pages named in config sources from their latest release (docs-src/_imported)
+  jupiter-docs import                      fetch the projects named by sources and discover in the config (docs-src/_imported)
   jupiter-docs init [dir]                  scaffold docs-src and docs.config.json
 
 Options: --config <file> (default docs.config.json)`;
@@ -17,7 +17,8 @@ function parse(argv) {
   return { flags, vals, rest };
 }
 const print = (project, strict) => {
-  for (const w of project.warnings) console.error(`warning: ${w}`);
+  // on GitHub Actions a warning is also an annotation on the run, so a project that was left out is seen
+  for (const w of project.warnings) console.error(`${process.env.GITHUB_ACTIONS ? "::warning::" : "warning: "}${w}`);
   for (const e of project.errors) console.error(`error: ${e}`);
   return project.errors.length > 0 || (strict && project.warnings.length > 0);
 };
@@ -29,7 +30,7 @@ export async function main(argv) {
   if (cmd === "import") {
     const { loadConfig } = await import("./config.mjs"); const { runImport } = await import("./import.mjs"); const { config, root, errors } = loadConfig(configFile);
     if (!config) { for (const e of errors) console.error(`error: ${e}`); return 1; }
-    try { const r = await runImport(config, root); console.log(`import: ${r.pages} page(s)`); return 0; } catch (e) { console.error(`error: ${e.message}`); return 1; }
+    try { const r = await runImport(config, root); console.log(`import: ${r.projects} project(s), ${r.pages} page(s)`); return 0; } catch (e) { console.error(`error: ${e.message}`); return 1; }
   }
   if (cmd !== "check" && cmd !== "build") { console.error(`unknown command "${cmd}"\n\n${HELP}`); return 1; }
   const project = loadProject(configFile);

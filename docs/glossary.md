@@ -3,4 +3,5 @@
 # Glossary
 
 - <a id="term-graphic"></a>**Graphic**: A one-stroke SVG from the graphics set: an icon, a spot illustration, a scene or a rule.
+- <a id="term-project"></a>**Project**: A repository with a docs.config.json and a docs-src folder. Its pages appear on this site under the project's id.
 - <a id="term-token"></a>**Token**: A named design constant, such as a colour or a spacing step, defined once in jupiter.tokens.json and generated into every target.
