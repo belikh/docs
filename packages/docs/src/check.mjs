@@ -5,6 +5,7 @@ import { AUDIENCES, FRONT_MATTER, STATUSES } from "./spec.mjs";
 import { visit, plain } from "./parse.mjs";
 import { findTerm } from "./source.mjs";
 import { pageDir } from "./write-html.mjs";
+import { checkVoice, proseOf } from "./voice.mjs";
 import { graphicsSet } from "./resolve.mjs";
 
 /** @returns {{errors: string[], warnings: string[]}} */
@@ -39,6 +40,9 @@ export function checkProject({ config, root, pages, projects }) {
     if (m.status !== undefined && !STATUSES.includes(m.status)) err(p, 1, `front matter: status must be one of ${STATUSES.join(", ")}`);
     if (m.icon !== undefined && g && !g.names.has(`icon/${m.icon}`)) err(p, 1, `front matter: unknown icon "${m.icon}" (icon tier name, for example home)`);
     if (/[^a-z0-9/_-]/.test(p.id)) warn(p, 1, `file name "${p.rel}" should be lower case letters, digits, - and _ (it becomes the URL)`);
+    // voice: an error in the pages of this repository. In an imported page every finding is a warning, so the project stays
+    // on the site and the build log names what its own repository has to fix.
+    for (const u of [{ line: 1, text: `${m.title ?? ""}. ${m.summary ?? ""}` }, ...proseOf(p.tree)]) for (const v of checkVoice(String(u.text))) (v.level === "error" && p.project.local ? err : warn)(p, u.line, `voice: ${v.message}`);
     let prev = 1;
     visit(p.tree, (n) => {
       switch (n.type) {
@@ -74,6 +78,11 @@ export function checkProject({ config, root, pages, projects }) {
         default: break;
       }
     });
+  }
+  // redirects: an old address must not be a page, and its target must exist (a warning: the target can belong to a project that was left out)
+  for (const [from, to] of Object.entries(config.redirects ?? {})) {
+    if (paths.has(from.replace(/^\/|\/$/g, ""))) errors.push(`docs.config.json: redirects: "${from}" is the address of a page`);
+    if (!byId.has(to) && !byId.has(`${to}/index`)) warnings.push(`docs.config.json: redirects: "${from}" points to "${to}", which is not a page; no redirect is written`);
   }
   for (const pr of noGlossaryPage) errors.push(`${pr.local ? config.src : where(pr)}: glossary terms are used but no page contains ::glossary`);
   for (const pr of projects) for (const s of pr.sections) if (!pr.nav.some((x) => x.id === s.id)) warnings.push(`${where(pr)}: section "${s.id}" has no pages`);

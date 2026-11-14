@@ -21,7 +21,7 @@ The visual rules (type, colour, space, graphics) are in `DESIGN.md` in the `jupi
 
 1. In `belikh/docs` run `npm run update:design` once; it downloads the latest design system release into `vendor/design`, which is not committed. A project that uses the generator elsewhere has its own copy of that step or sets `JUPITER_DESIGN_DIR`.
 2. Edit or add a file in `docs-src/`. The file name is the page id (`guides/setup.md` is `guides/setup`).
-3. `jupiter-docs check` validates the source and names the file and line of every problem.
+3. `jupiter-docs check` validates the source and the wording, and names the file and line of every problem.
 4. `jupiter-docs build` writes `docs/*.md` and `dist/site`. Commit `docs-src/` and the regenerated `docs/*.md` together. CI runs `jupiter-docs build --check` and fails when a generated file is stale.
 5. `jupiter-docs build --pdf` builds the PDF; it needs `xelatex` and `rsvg-convert`.
 6. For a new project run `jupiter-docs init`, which creates `docs.config.json`, `docs-src/index.md` and a first page in the `start` folder. Then follow "Put a project on docs.jupiter.au" below.
@@ -30,10 +30,10 @@ The visual rules (type, colour, space, graphics) are in `DESIGN.md` in the `jupi
 
 docs.jupiter.au shows every project. A project's pages stay in the project's repository; `belikh/docs` holds no copy and imports them before each build (`jupiter-docs import`, daily and on every push there).
 
-1. In the project's repository, write `docs.config.json` (`project`, `description`, an `icon`, `versionFrom`, `repo`, a `glossary` if the pages use terms) and the pages in `docs-src/`. Run `jupiter-docs check`, then commit both to the default branch.
+1. In the project's repository, write `docs.config.json` (`project`, `id`, `description`, an `icon`, `versionFrom`, `repo`, a `glossary` if the pages use terms) and the pages in `docs-src/`. Run `jupiter-docs check`, then commit both to the default branch.
 2. A public repository of `belikh` is now registered: the `discover` key in `docs.config.json` of `belikh/docs` finds every such repository that has a `docs.config.json` at its root. Nothing is edited in `belikh/docs`.
 3. A repository of another owner, or one that needs a fixed branch or another id, is registered by one entry in `sources` of `belikh/docs`: `{ "repo": "owner/name" }`, with optional `ref`, `id`, `title`, `summary` and `icon`.
-4. The site reads the project's newest release, or its default branch when there is no release or the release has no `docs.config.json`. Pages appear at `/<project id>/<path of the file>/`; the id is the repository name in lower case.
+4. The site reads the project's newest release, or its default branch when there is no release or the release has no `docs.config.json`. Pages appear at `/<project id>/<path of the file>/`. The id is `id` in the project's `docs.config.json`, or the repository name in lower case when it has none. Choose it once: a published address does not change.
 5. To publish straight after a release, the project's release workflow sends a `repository_dispatch` event of type `docs-changed` to `belikh/docs`.
 
 A project whose pages fail `jupiter-docs check` is left out of the site with a warning in the build log, so run the check in the project's own CI. Private repositories, forks and archived repositories are not discovered. `docs/adding-a-project.md` in `belikh/docs` is the full reference.
@@ -54,7 +54,7 @@ Another folder name becomes a section titled after the folder. List `sections` i
 
 ## Source format
 
-`docs.config.json` (project root) holds `project`, `description`, `icon` (shown on the project's card), `version` or `versionFrom`, `repo`, `siteUrl`, `base`, `sections` (optional, in navigation order, each `{ id, title, summary, icon }`), `glossary` (term to definition) and `hero` (a spot graphic for the landing page). A site that shows other projects also has `sources` and `discover`. Unknown keys are errors.
+`docs.config.json` (project root) holds `project`, `description`, `icon` (shown on the project's card), `version` or `versionFrom`, `repo`, `siteUrl`, `base`, `sections` (optional, in navigation order, each `{ id, title, summary, icon }`), `glossary` (term to definition) and `hero` (a spot graphic for the landing page). A site that shows other projects also has `sources` and `discover`, and `redirects` (old address to page id) keeps an address alive after a page moves. Unknown keys are errors.
 
 Each page starts with a YAML block:
 
@@ -88,7 +88,7 @@ Inline and link syntax:
 
 ## What each output looks like
 
-- Site: the app's look from the tokens and components CSS, SGI fonts, light and dark, a home page with a card per project, a landing page per project, a left navigation by section, an on-page contents, previous and next links, search across all projects, a print style and an `llms.txt` that lists every page with its summary.
+- Site: the app's look from the tokens and components CSS, with SGI fonts, in light and dark. The home page has a card per project, and each project has a landing page. Every page has a left navigation by section, an on-page contents, previous and next links and a print style. Search covers all projects, and `llms.txt` lists every page with its summary.
 - `docs/*.md`: plain GitHub Markdown. Callouts become GitHub alerts, graphics become light/dark `<picture>` blocks, page links become relative `.md` links.
 - PDF: `jupiter-docs.cls` in `latex/` of `belikh/docs`, which extends `jupiter.sty` from the design system's LaTeX bundle, with a cover, running header, numbered sections and callout boxes.
 
@@ -106,15 +106,28 @@ Graphics come only from `@belikh/jupiter-graphics`: no emoji, no other icon sets
 - A `:::see-also` block with the next page a reader needs.
 - `status: draft` until the steps have been run from a clean checkout.
 
-## Writing rules
+## Voice
 
-Same voice as the `github-readme` skill: plain words, short sentences, say what a thing does and then how to use it. No slogans, no "X, not Y", no filler openers or closers, no emoji, no comments about the document itself ("this page", "in this guide"). Headings are nouns or short verb phrases. Put install and run commands near the top. When a command, path or option changes, change the page in the same commit.
+Read `VOICE.md` (beside this file) before you write any prose. It is the voice of every jupiter.au project, shared with the `github-readme` skill. In short:
+
+- Answer first: the first sentence says what the thing is or what the reader gets.
+- One idea per sentence, most under 25 words. Say "you", use the present tense, write steps as commands.
+- State facts a reader can check: numbers, names, defaults, paths, exact error text. Delete a sentence that has none.
+- Leave out praise words, sincerity words, signposting, contrast for effect, the em dash, emoji and exclamation marks. `VOICE.md` lists them with what to write in their place.
+- The page does not describe itself, and it stops when the content ends.
+
+`jupiter-docs check` enforces this on every page: a listed word or phrase is an error, a long sentence is a warning. Fix the sentence, and do not swap the word for a synonym. Headings are nouns or short verb phrases. When a command, path or option changes, change the page in the same commit.
+
+## README files and release notes
+
+A `README.rst`, a profile README, a repository description and release notes are written with the `github-readme` skill, which has its own layout and format. Use that skill for those files and this one for everything in `docs-src/`. Both follow `VOICE.md`. Check a README with `jupiter-docs voice README.rst`.
 
 ## Where things live
 
 - `packages/docs`: the generator (`src/spec.mjs` lists every directive and header key; `src/cli.mjs` the commands).
 - `docs-src` and `docs.config.json`: the site's source. `docs/writing-documentation.md` is the full format reference.
 - `latex/jupiter-docs.cls`: the PDF class.
+- `skill/VOICE.md`: the voice guide. `VOICE` in `packages/docs/src/spec.mjs` is the word list the check uses.
 - `skill-readme/SKILL.md` in `belikh/docs`: the `github-readme` skill, for README files. `jupiter-docs init` links it and this skill into a project's `.claude/skills`.
 - `scripts/update-design.mjs`: downloads the design system release.
 - Pages of other projects are fetched by `jupiter-docs import` into `docs-src/_imported/<project id>/`, with the list of projects in `projects.json` beside them; the front matter key `source` marks them. Do not edit them in `belikh/docs`: change the file in its own repository.

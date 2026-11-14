@@ -36,6 +36,7 @@ export function loadConfig(file) {
       }
     });
   }
+  if (c.redirects !== undefined && (!c.redirects || typeof c.redirects !== "object" || Array.isArray(c.redirects) || Object.values(c.redirects).some((v) => typeof v !== "string"))) errors.push(`${file}: "redirects" must be an object of old address to page id`);
   if (c.discover !== undefined) {
     const d = c.discover;
     if (!d || typeof d !== "object" || !/^[\w.-]+$/.test(d.owner ?? "")) errors.push(`${file}: "discover" needs owner (a GitHub user or organisation)`);

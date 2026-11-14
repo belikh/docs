@@ -113,7 +113,8 @@ npm install
 ## Check and build
 
 ```sh title="Commands"
-jupiter-docs check              # validate the source
+jupiter-docs check              # validate the source and its wording
+jupiter-docs voice README.rst   # check the wording of any other Markdown or .rst file
 jupiter-docs build              # write docs/*.md and dist/site
 jupiter-docs build --pdf        # also build the PDF (needs xelatex)
 jupiter-docs build --check      # fail when docs/*.md is out of date (CI)
@@ -121,7 +122,12 @@ jupiter-docs import             # fetch the projects named by sources and discov
 jupiter-docs init               # scaffold docs-src in a new project
 ```
 
-`check` reports a missing title or summary, an unknown section, graphic, icon or glossary term, a broken page link or anchor, a heading that skips a level, an unclosed directive and a code block without a language. Each message names the file and line.
+`check` names the file and line of each problem:
+
+- a missing title or summary, or an unknown section, graphic, icon or glossary term
+- a broken page link or anchor
+- a heading that skips a level, an unclosed directive, a code block without a language
+- wording that fails the voice rules (see [Voice](#voice))
 
 :::warning
 `build --md` only writes files that carry the generated header. Hand-written files in `docs/` are never touched or deleted.
@@ -144,9 +150,24 @@ The site and the PDF take their colours, fonts, graphics and LaTeX classes from 
 - The errors a reader will meet, quoted exactly, each with its cause and its fix.
 - Links to the next page a reader needs, in a `:::see-also` block.
 
-## Writing rules
+## Voice
 
-Write like a person explaining the project to a colleague. Use plain words and short sentences. Say what a thing does, then how to use it. No slogans, no "X, not Y", no filler openers, no emoji. Headings are nouns or short verb phrases. The visual rules (type, colour, space, graphics) are in `DESIGN.md` of the `jupiter-design-system` skill; the site and the PDF already follow them, so write content and leave the look to the generator.
+A reader who has never seen the project should find the answer on the first screen and understand every sentence on the first read.
+
+- Answer first. The first sentence says what the thing is or what the reader gets.
+- One idea per sentence, most under 25 words. Say "you", use the present tense, write steps as commands.
+- State facts a reader can check: numbers, names, defaults, paths, exact error text.
+- Use the short word: use, help, show, before, because, can.
+- The page does not describe itself, and it stops when the content ends.
+
+`jupiter-docs check` tests the prose of every page. Code blocks, inline code and block quotes are left out, so quoted text stays as given.
+
+| Finding | Level |
+| --- | --- |
+| Praise words such as `powerful`, `robust`, `seamless`; sincerity words such as `simply`, `truly`; signposting such as `worth noting`, `in conclusion`, `moreover`; `not just X but Y`; `this page explains`; an em dash; an emoji | Error |
+| `note that`, `in order to`, `is able to`, `prior to`, `easily`, `X, not Y`, an exclamation mark, a sentence over 35 words | Warning |
+
+Fix the sentence when a word is flagged: state the fact the word stood for. `jupiter-docs voice README.rst` runs the same check on any Markdown or `.rst` file. The full guide, with rewrites, is [VOICE.md](../skill/VOICE.md). The visual rules are in `DESIGN.md` of the `jupiter-design-system` skill; the site and the PDF already follow them.
 
 ## Add a graphic
 

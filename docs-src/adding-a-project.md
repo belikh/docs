@@ -37,7 +37,7 @@ A repository of another owner, or one that should use a fixed branch or another 
 | --- | --- |
 | `repo` | `owner/name` on GitHub. |
 | `ref` | A tag, a branch or `latest`. `latest` is the newest release, or the default branch when the project has no release or the release has no `docs.config.json`. |
-| `id` | The first part of the project's addresses, for example `/aquila/`. Default: the repository name in lower case. |
+| `id` | The first part of the project's addresses, for example `/aquila/`. Default: `id` in the project's own `docs.config.json`, then the repository name in lower case. |
 | `title`, `summary`, `icon` | Replace the values from the project's own `docs.config.json`. |
 | `path` | A local folder in place of `repo`, to preview a project that is not pushed yet. |
 
@@ -48,6 +48,7 @@ Private repositories, forks and archived repositories are not discovered.
 ```json title="docs.config.json of the project"
 {
   "project": "Aquila",
+  "id": "aquila",
   "description": "A fleet manager for NixOS hosts.",
   "icon": "server",
   "versionFrom": "package.json",
@@ -56,7 +57,7 @@ Private repositories, forks and archived repositories are not discovered.
 }
 ```
 
-`project` and `description` become the title and the summary of the project's card on the home page. `icon` is the icon on that card. The glossary belongs to the project: `[[term:Host]]` on one of its pages links to the project's own glossary page.
+`project` and `description` become the title and the summary of the project's card on the home page. `icon` is the icon on that card. `id` is the first part of the project's addresses; choose it once, because addresses are permanent. The glossary belongs to the project: `[[term:Host]]` on one of its pages links to the project's own glossary page.
 
 ## Sections
 
@@ -81,6 +82,16 @@ A page is published at `/<project id>/<path of the file>/`, so `docs-src/guides/
 ## When a project has errors
 
 Run `jupiter-docs check` in the project before a release. If a released project still fails the check here, the site is built without it and the build log has a warning with every error. Errors in the pages of this repository stop the build.
+
+Wording is treated differently. A voice finding in a project's page is an error in the project's own check and a warning here. The page stays on the site, and the build log names the sentence to fix (see [[writing-documentation#voice|Voice]]).
+
+## When a page moves
+
+Addresses are permanent once published. When a file is renamed or a project changes its id, add the old address to `redirects` in `docs.config.json` of this repository. The site keeps a small page there that sends the reader to the new one:
+
+```json title="docs.config.json of this repository"
+"redirects": { "consuming": "design/consuming" }
+```
 
 ## Rebuild after a release
 

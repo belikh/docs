@@ -2,7 +2,6 @@
   "project": "Jupiter documentation",
   "id": "jupiter-docs",
   "description": "Documentation of every jupiter.au project in one place. Each project keeps its pages in its own repository; this site reads them from the project's latest release.",
-  "versionFrom": "vendor/design/release.json",
   "repo": "https://github.com/belikh/docs",
   "siteUrl": "https://docs.jupiter.au",
   "author": "belikh",
@@ -11,8 +10,16 @@
   "sections": [
     { "id": "contribute", "title": "Write", "summary": "How documentation is written, registered and published.", "icon": "edit" }
   ],
-  "discover": {
-    "owner": "belikh"
+  "discover": { "owner": "belikh" },
+  "redirects": {
+    "consuming": "design/consuming",
+    "recipes": "design/recipes",
+    "ha-australia-carpark": "carpark-australia",
+    "ha-australia-carpark/install": "carpark-australia/install",
+    "ha-australia-carpark/configure": "carpark-australia/configure",
+    "ha-australia-carpark/entities": "carpark-australia/entities",
+    "ha-australia-carpark/data-sources": "carpark-australia/data-sources",
+    "ha-australia-carpark/development": "carpark-australia/development"
   },
   "sources": [
     {

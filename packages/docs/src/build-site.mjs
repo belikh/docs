@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { dirname, join, extname } from "node:path";
 import { htmlWriter, esc, makeUrl, pageHref, pageDir } from "./write-html.mjs";
 import { plain, visit } from "./parse.mjs";
-import { graphicSvg, logos, packageRoot, pkgDir, readCss } from "./resolve.mjs";
+import { designRelease, graphicSvg, logos, packageRoot, pkgDir, readCss } from "./resolve.mjs";
 
 const hash = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 10);
 const THEME_SCRIPT = `(function(){try{var q=new URLSearchParams(location.search).get("theme");var m=q||localStorage.getItem("jp-theme");if(m==="light"||m==="dark")document.documentElement.setAttribute("data-theme",m);if(localStorage.getItem("jp-density")==="compact")document.documentElement.setAttribute("data-density","compact")}catch(e){}})();`;
@@ -53,6 +53,7 @@ export async function buildSite(project) {
   hashed(out, assets, "search.json", JSON.stringify(index));
 
   const w = htmlWriter({ pages, config, root }); const version = config.version ? `v${config.version}` : "";
+  const design = designRelease(root);
   const spot = (ref, cls = "") => { const s = graphicSvg(ref, root); return s ? `<span class="${cls}">${s}</span>` : ""; };
 
   function layout({ page, title, desc, main, toc = [], wide = false, url, rootRel }) {
@@ -97,7 +98,7 @@ ${main}
 </main>
 ${wide ? "" : tocHtml}
 </div>
-<footer class="dx-foot"><div class="jp-container dx-foot__in"><span>${esc(config.project)} ${esc(version)}</span><span>Built with jupiter-docs</span></div></footer>
+<footer class="dx-foot"><div class="jp-container dx-foot__in"><span>${esc(config.project)} ${esc(version)}</span><span>Built with jupiter-docs${design?.tag ? ` and the Jupiter design system ${esc(design.tag)}` : ""}</span></div></footer>
 <script src="${a("docs.js")}" defer></script>
 </body>
 </html>
@@ -152,6 +153,13 @@ ${w.body(page, url)}
 ${pager}
 ${src ? (src.url ? `<p class="dx-edit"><a href="${esc(src.url)}" rel="noopener">Source: ${esc(src.repo)} ${esc(src.ref)}</a></p>` : "") : config.repo ? `<p class="dx-edit"><a href="${esc(`${config.repo}/edit/${config.repoBranch}/${page.file}`)}" rel="noopener">Edit this page on the source repository</a></p>` : ""}`;
     write(`${pageDir(page.id)}/index.html`, layout({ page, title: titleOf(page), desc: page.meta.summary, main, toc: page.headings.filter((h) => h.depth <= 3 && h.depth > 1), url }));
+  }
+
+  // redirects: a small page at each old address that sends the reader (and a search engine, through the canonical link) to the new one
+  for (const [from, to] of Object.entries(config.redirects ?? {})) {
+    const target = pages.find((p) => p.id === to || p.id === `${to}/index`); const dir = from.replace(/^\/|\/$/g, ""); if (!target || !dir) continue;
+    const rel = pageHref(makeUrl(config.base, dir), target.id); const abs = config.siteUrl ? config.siteUrl.replace(/\/$/, "") + config.base + dirOf(target) : rel;
+    write(`${dir}/index.html`, `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>${esc(target.meta.title)}</title>\n<meta http-equiv="refresh" content="0; url=${esc(rel)}">\n<link rel="canonical" href="${esc(abs)}">\n<meta name="robots" content="noindex">\n</head>\n<body>\n<p>This page moved to <a href="${esc(rel)}">${esc(target.meta.title)}</a>.</p>\n</body>\n</html>\n`);
   }
 
   // 404: base-absolute URLs because it is served at any depth

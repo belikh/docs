@@ -32,5 +32,21 @@ if (existsSync(gh)) {
   for (const t of ["README.rst", "profile-README.rst", "org-profile-README.rst"]) if (!rs.includes(t) || !existsSync(join(gh, "templates", t))) bad.push(`github-readme: template ${t} is not named in the skill or not in the design release`);
   for (const m of rs.matchAll(/packages\/github\/graphics\/(icon|rule|spot|scene)\/([\w-]+)-(light|dark)\.svg/g)) if (!existsSync(join(gh, "graphics", m[1], `${m[2]}-${m[3]}.svg`))) bad.push(`github-readme: graphic not in the design release: ${m[1]}/${m[2]}-${m[3]}.svg`);
 } else console.warn("warning: vendor/design is missing (npm run update:design): the templates and graphics named by github-readme are not checked");
+// The voice guide (skill/VOICE.md): both skills point to it, each skill hands over to the other, and every word list entry
+// of spec.VOICE is shown in the guide.
+const voice = readFileSync(join(root, "skill/VOICE.md"), "utf8");
+if (!ds.includes("`VOICE.md`")) bad.push("the jupiter-docs skill does not point to VOICE.md");
+if (!rs.includes("`VOICE.md`")) bad.push("the github-readme skill does not point to VOICE.md");
+if (!/README[^\n]*`github-readme` skill/.test(ds)) bad.push("the jupiter-docs skill does not hand README files to the github-readme skill");
+if (!/`docs-src\/`[^\n]*`jupiter-docs` skill/.test(rs)) bad.push("the github-readme skill does not hand documentation pages to the jupiter-docs skill");
+for (const s2 of [ds, rs]) if (!s2.includes("jupiter-docs voice")) bad.push("a skill does not name the jupiter-docs voice command");
+if (!cli.includes('"voice"')) bad.push("command not in the CLI: voice");
+for (const [label] of [...spec.VOICE.error, ...spec.VOICE.warning]) if (!voice.toLowerCase().includes(`\`${label.toLowerCase()}\``)) bad.push(`VOICE.md does not show the listed wording: ${label}`);
+if (!voice.includes(`over ${spec.VOICE.maxSentenceWords} words`)) bad.push(`VOICE.md does not state the sentence limit of ${spec.VOICE.maxSentenceWords} words`);
+// Everything written by hand in this repository passes the voice check (docs-src is checked by jupiter-docs check).
+const { checkVoiceFiles } = await import(join(root, "packages/docs/src/voice.mjs"));
+const prose = ["README.rst", "AGENTS.md", "skill/SKILL.md", "skill/VOICE.md", "skill-readme/SKILL.md", "packages/docs/README.md"];
+const v = checkVoiceFiles(prose.map((f) => join(root, f)));
+for (const m of [...v.errors, ...v.warnings]) bad.push(m.replace(`${root}/`, ""));
 if (bad.length) { console.error(`SKILL.md drift:\n  ${bad.join("\n  ")}`); process.exit(1); }
 console.log("The agent skills match the generator and the design release.");

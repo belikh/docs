@@ -45,7 +45,7 @@ export const STANDARD_SECTIONS = [
 
 export const CONFIG_KEYS = {
   project: "string, required: the project name",
-  id: "string: file name for the PDF (default: the project name, lower case)",
+  id: "string: the project's short name in lower case letters, digits and -. It is the file name of the PDF and the first part of the project's addresses on a hub site (default: the project name, lower case; on a hub, the repository name)",
   description: "string: one sentence for the landing page and meta description",
   icon: "string: icon tier name shown on the project's card when a hub site lists the project",
   version: "string, or versionFrom: path of a JSON file whose version field is used",
@@ -66,6 +66,74 @@ export const CONFIG_KEYS = {
   author: "string: author line on the PDF cover",
   pdf: "string: file name of the published PDF in the site root (for example jupiter-docs.pdf); adds a PDF link to the top bar and the landing page",
   sources: "list of projects whose pages jupiter-docs import fetches. { repo } reads the docs.config.json and source folder of that repository. { repo, files, sections } lists hand-written Markdown files instead: files maps a repo path to { id, title, summary, section, order, icon, audience, status }. Optional on both: ref (a tag, a branch or latest: the newest release, or the default branch when there is none), id, title, summary, icon. { path } reads a local folder",
+  redirects: "object: an old address to a page id, for example { \"consuming\": \"design/consuming\" }. The site keeps a page at the old address that sends the reader to the new one",
   discover: "{ owner, exclude? }: every public repository of this GitHub user or organisation that has a docs.config.json at its root is imported as a project; exclude lists repository names to leave out",
   designDir: "string: where the design system release is unpacked (default vendor/design, or $JUPITER_DESIGN_DIR)",
+};
+
+// ---- Voice. `jupiter-docs check` and `jupiter-docs voice` test prose against these tables (code, inline code and block quotes are
+// not tested). Each entry is [label, pattern, what to write]. The label is what skill/VOICE.md shows; the pattern is a
+// case-insensitive regular expression matched on whole words. "error" entries fail the check, "warning" entries are printed.
+export const VOICE = {
+  error: [
+    // praise that states no fact
+    ["seamless", "seamless(ly)?", "say what connects to what, and how"],
+    ["effortless", "effortless(ly)?", "say how many steps it takes"],
+    ["robust", "robust(ly|ness)?", "say what it survives: a restart, a bad input, a lost connection"],
+    ["powerful", "powerful(ly)?", "say what it can do"],
+    ["elegant", "elegant(ly)?", "describe the design"],
+    ["delightful", "delight(ful|fully|s|ed)?", "say what the reader gets"],
+    ["stunning", "stunning(ly)?", "describe what is on the screen"],
+    ["vibrant", "vibrant", "name the colours"],
+    ["cutting-edge", "cutting[- ]edge|state[- ]of[- ]the[- ]art|world[- ]class|best[- ]in[- ]class|next[- ]generation", "state the measured result"],
+    ["revolutionary", "revolutionary|game[- ]chang(er|ing)|groundbreaking", "say what changed"],
+    ["blazing fast", "blazing(ly)?[- ]fast|lightning[- ]fast", "give the time in milliseconds or seconds"],
+    ["supercharge", "supercharg(e|es|ed|ing)|turbocharg(e|es|ed|ing)", "say what gets faster and by how much"],
+    ["streamline", "streamlin(e|es|ed|ing)", "say which steps are removed"],
+    ["empower", "empower(s|ed|ing)?", "say what the reader can now do"],
+    ["holistic", "holistic(ally)?|synerg(y|ies|istic)|paradigm", "say the literal thing"],
+    // long words where a short one exists
+    ["leverage", "leverag(e|es|ed|ing)", "write use"],
+    ["utilize", "utili[sz](e|es|ed|ing|ation)", "write use"],
+    ["facilitate", "facilitat(e|es|ed|ing)", "write help, or say what it does"],
+    ["delve", "delv(e|es|ed|ing)", "write look at, or start with the content"],
+    ["foster", "foster(s|ed|ing)?", "write help or encourage, or state the effect"],
+    ["showcase", "showcas(e|es|ed|ing)", "write show"],
+    ["underscores", "underscor(es|ed|ing) (the|how|why|that|a|an)", "write shows"],
+    ["myriad", "myriad|plethora", "give the number, or write many"],
+    ["pivotal", "pivotal|crucial", "say what depends on it"],
+    ["tapestry", "tapestry|testament to", "say the literal thing"],
+    // words that claim sincerity or ease
+    ["simply", "simply", "delete the word; the step is as hard as it is"],
+    ["genuinely", "genuinely|truly|honestly", "delete the word and give the evidence"],
+    ["basically", "basically|obviously|of course|needless to say", "delete it; if it were obvious the reader would not be reading"],
+    // filler and signposting
+    ["worth noting", "(it('s| is) )?worth (noting|mentioning|pointing out)", "state the fact"],
+    ["it is important to", "it('s| is) important to (note|remember|understand|know|mention)( that)?|importantly", "state the fact; use a :::warning when the reader can lose something"],
+    ["in conclusion", "in (conclusion|summary)|to sum up|in a nutshell|at the end of the day", "stop when the content ends"],
+    ["moreover", "moreover|furthermore", "start the sentence with its subject"],
+    ["let's", "let('|’)s|dive (in|into|deeper)|deep dive", "start with the first step"],
+    ["welcome to", "welcome to|look no further|say goodbye to|whether you('|’)?re|whether you are", "say what the project does"],
+    ["when it comes to", "when it comes to|in the world of|in today('|’)s", "name the subject and say the fact"],
+    ["a wide range of", "a (wide|broad|vast) (range|variety|array) of", "list them, or give the number"],
+    ["plays a role", "plays? an? ([a-z]+ )?role", "say what it does"],
+    ["take it to the next level", "to the next level|unlock the (full )?(power|potential)|harness the power", "say what the reader can now do"],
+    ["due to the fact that", "due to the fact that|in the event that|at this point in time|has the ability to|for the purpose of", "write because, if, now, can, to"],
+    ["feel free to", "feel free to|rest assured|i hope this|happy to help|great question|as an ai", "delete it"],
+    // contrast for effect
+    ["not just X but Y", "not (just|only|merely) [^.!?]{0,80}\\bbut\\b|more than just|(isn('|’)t|is not|aren('|’)t|are not) just", "describe what it is"],
+    // the document talking about itself
+    ["this page explains", "this (page|guide|document|section|article|tutorial|readme|chapter) (explains|describes|covers|shows|walks|will|provides|outlines|details|introduces|is about)|in this (page|guide|document|section|article|tutorial|chapter)|we('|’)ll (cover|explore|look|walk|show|see|learn)|we will (cover|explore|look|walk|show|see|learn)", "start with the content"],
+  ],
+  warning: [
+    ["note that", "note that|please note|keep in mind that|bear in mind that", "state the fact, or use a :::note"],
+    ["in order to", "in order to", "write to"],
+    ["additionally", "additionally,|in addition,", "start the sentence with its subject"],
+    ["is able to", "(is|are) able to", "write can"],
+    ["prior to", "prior to|subsequent to", "write before or after"],
+    ["easily", "easily|quickly and easily", "say how many steps or how long"],
+    ["X, not Y", "[a-z]+, not (a|an|just|merely) [a-z]+", "describe what it is; compare only two real options"],
+  ],
+  /** A sentence with more words than this is a warning. */
+  maxSentenceWords: 35,
 };

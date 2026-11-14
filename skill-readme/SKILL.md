@@ -84,7 +84,7 @@ Rules for the page:
 
 ## Icons and graphics
 
-Use graphics from the design system and nothing else: no emoji, no icon fonts, no third-party icon sets, no clip art. Everything comes from `@belikh/jupiter-graphics`, baked for READMEs into `packages/github/graphics/<tier>/<name>-{light,dark}.svg` (tiers: `icon` 20 to 32px, `spot` 120px and up, `scene` wide hero art, `rule` dividers). `<img>` cannot take the text colour, so always use the baked light/dark pair, never the unbaked build output of the graphics package. Find names on the Graphics page of the app or in the manifest the graphics package builds. If the set has no graphic you need, add one to `packages/graphics` first.
+Use graphics from the design system and nothing else: no emoji, no icon fonts, no third-party icon sets, no clip art. Everything comes from `@belikh/jupiter-graphics`, baked for READMEs into `packages/github/graphics/<tier>/<name>-{light,dark}.svg`. The tiers are `icon` (20 to 32px), `spot` (120px and up), `scene` (wide hero art) and `rule` (dividers). `<img>` cannot take the text colour, so always use the baked light/dark pair, never the unbaked build output of the graphics package. Find names on the Graphics page of the app or in the manifest the graphics package builds. If the set has no graphic you need, add one to `packages/graphics` first.
 
 Where they go:
 
@@ -115,19 +115,25 @@ Inside `belikh/design` the paths are relative (under `packages/github/graphics`)
 
 ## Writing
 
-Write like a person explaining their project to a colleague.
+The voice is the same as the documentation's. Read `VOICE.md` in the `jupiter-docs` skill before you write; it has the rules, the rewrites and the words to leave out. For a README:
 
 - Say what the thing does, then how to use it. Put the install and run commands near the top.
-- Use plain words and short sentences. Prefer concrete nouns and numbers to adjectives.
-- Do not describe the README, the layout or the project's philosophy. No "this document", "this repo aims to", "welcome to".
-- No slogans or taglines. No "X, not Y" and "not just X, but Y". No lists of three adjectives.
-- No filler openers or closers ("In summary", "Note that", "It's worth mentioning"), no emoji, no exclamation marks.
-- Do not comment on your own work ("a calmer layout", "now more robust"). Say what changed in the commit message, not the README.
+- Use plain words and short sentences, one idea each. Prefer concrete nouns and numbers to adjectives.
+- Do not describe the README, the layout or the project's philosophy: no `this document`, `this repo aims to`, `welcome to`.
+- No slogans or taglines, no `X, not Y`, no `not just X, but Y`, no lists of three adjectives.
+- No filler openers or closers (`in summary`, `note that`, `it's worth mentioning`), no emoji, no exclamation marks, no em dash.
+- Do not comment on your own work (`a calmer layout`, `now more robust`). Say what changed in the commit message.
 - Headings are nouns or short verb phrases: "Install", "Configuration", "Change a token".
-- One idea per sentence. If a sentence needs a second "and", split it.
 - Keep the README current. When a command or path changes, change the README in the same commit. Delete sections that stopped being true.
 
-Check before finishing: read it as someone who has never seen the repo. Can they install and run the project from the first screen?
+Check before finishing:
+
+1. Run `npx jupiter-docs voice README.rst` and fix every finding. Fix the sentence; a synonym for a flagged word keeps the problem.
+2. Read it as someone who has never seen the repo. Can they install and run the project from the first screen?
+
+## Documentation pages
+
+A README says what the project is and how to start. Guides, references and anything longer than a screen go in the project's `docs-src/` folder and are written with the `jupiter-docs` skill, which publishes them on docs.jupiter.au. Link the README to that page and keep the detail there.
 
 ## Sections for a project README
 
@@ -135,7 +141,7 @@ Use only the ones that apply, in this order: what it is, install, use, configura
 
 ## Commit messages and release notes
 
-Same voice. The first line says what changed. The body says why it was needed. Commits are authored by `belikh <io@belic.net>` only, with no co-author or tool attribution lines.
+Same voice, and `jupiter-docs voice` checks a `CHANGELOG.md` or a notes file too. The first line says what changed. The body says why it was needed. Commits are authored by `belikh <io@belic.net>` only, with no co-author or tool attribution lines.
 
 ## Where things live
 

@@ -27,7 +27,7 @@ A public repository of ``belikh`` registers itself. Commit a ``docs.config.json`
 
 .. code-block:: json
 
-   { "project": "Aquila", "description": "A fleet manager for NixOS hosts.", "icon": "server", "versionFrom": "package.json" }
+   { "project": "Aquila", "id": "aquila", "description": "A fleet manager for NixOS hosts.", "icon": "server", "versionFrom": "package.json" }
 
 The next build finds the repository through ``discover`` in ``docs.config.json`` here and publishes its pages under ``/aquila/``. Nothing is edited in this repository.
 
@@ -63,7 +63,7 @@ The imported pages are written to ``docs-src/_imported``, which is not committed
 Design system dependency
 ------------------------
 
-This repository does not contain the design system and does not pin a version of it. ``npm run update:design`` downloads the files of the newest `belikh/design <https://github.com/belikh/design>`_ release (tokens, graphics, UI, GitHub kit, fonts and the LaTeX bundle) into ``vendor/design``, which is not committed. The generator and the LaTeX class read them from there. The workflows run the same step before every build.
+This repository does not contain the design system and does not pin a version of it. ``npm run update:design`` downloads the newest `belikh/design <https://github.com/belikh/design>`_ release into ``vendor/design``, which is not committed. The release holds the tokens, graphics, UI, GitHub kit, fonts and the LaTeX bundle. The generator and the LaTeX class read them from there. The workflows run the same step before every build.
 
 The ``docs-site`` workflow also runs every day, on demand, and on a ``repository_dispatch`` event of type ``design-released``, so a new design release reaches docs.jupiter.au without a commit here.
 
@@ -77,7 +77,8 @@ Develop
    npm ci
    npm run update:design    # download the latest design release into vendor/design
    npm test
-   npm run check            # import, validate the source, check docs/*.md is current
+   npm run lint             # the skills match the generator; README, AGENTS.md and the skills pass the voice check
+   npm run check            # import, validate the source and its wording, check docs/*.md is current
    npm run build:site       # dist/site
    npm run build:pdf        # dist/jupiter-docs.pdf; needs xelatex and rsvg-convert, checks the fonts with pdffonts
 
@@ -100,8 +101,8 @@ Layout
      - This repository's own pages, the list of projects (``discover``, ``sources``) and the site glossary
    * - ``latex/jupiter-docs.cls``
      - The PDF class; it loads ``jupiter.sty`` from the design bundle
-   * - ``skill/SKILL.md``
-     - The ``jupiter-docs`` agent skill, shipped in the package
+   * - ``skill/SKILL.md``, ``skill/VOICE.md``
+     - The ``jupiter-docs`` agent skill and the voice guide both skills follow, shipped in the package
    * - ``skill-readme/SKILL.md``
      - The ``github-readme`` agent skill for README files, shipped in the package
    * - ``scripts``

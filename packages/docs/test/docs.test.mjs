@@ -11,6 +11,7 @@ import { buildSite } from "../src/build-site.mjs";
 import { texWriter, texEscape } from "../src/write-tex.mjs";
 import { convertBody, runImport } from "../src/import.mjs";
 import { loadConfig } from "../src/config.mjs";
+import { checkVoice, proseOfFile } from "../src/voice.mjs";
 
 // the fixtures run in temporary folders, so point them at the design system release that npm run update:design downloaded
 process.env.JUPITER_DESIGN_DIR ??= join(dirname(fileURLToPath(import.meta.url)), "../../../vendor/design");
@@ -165,4 +166,35 @@ test("config: sources and discover are validated", () => {
   cfg.sources = [{ repo: "nope" }, { repo: "o/r", colour: 1 }, { repo: "o/r", sections: [{ id: "a", title: "A" }], files: { "x.md": { id: "x", title: "X", summary: "S.", section: "b" } } }]; cfg.discover = { exclude: [] };
   writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg)); const e = loadConfig(join(d, "docs.config.json")).errors.join("\n");
   for (const want of ["sources[0] needs repo", 'unknown key "colour"', 'section "b" is not in sources[2].sections', '"discover" needs owner']) assert.ok(e.includes(want), `missing: ${want}\n${e}`);
+});
+
+test("voice: marketing words, filler, em dash and emoji are errors; long sentences and soft patterns are warnings", () => {
+  const levels = (t) => checkVoice(t).map((v) => v.level).join(",");
+  for (const bad of ["A powerful, robust tool.", "It integrates seamlessly.", "It's worth noting that it runs.", "This guide explains the setup.", "Not just a tool, but a platform.", "It runs \u2014 fast.", "Done \u2705", "In conclusion, it works.", "Simply run it.", "We leverage the cache."]) assert.ok(levels(bad).includes("error"), bad);
+  for (const soft of ["Note that it restarts.", "Run it in order to build.", "It works!", "A grammar, not a costume.", "Fast. Simple. Yours.", `${"word ".repeat(36)}end.`]) assert.equal(levels(soft), "warning", soft);
+  for (const fine of ["Run `npm test`. It prints 16 passing tests.", "The importer skips private repositories.", "An underscore joins the two words.", "Copyright \u00a9 2026.", "Set the port to 8080, not 80."]) assert.equal(levels(fine), "", fine);
+});
+test("voice: code, inline code and quotes are not checked; a page with a listed word fails the check, an imported one warns", async () => {
+  const d = copy(); writeFileSync(join(d, "docs-src/v.md"), "---\ntitle: V\nsummary: S.\nsection: a\n---\n\nUse `robust` in code.\n\n> A powerful quote.\n\n```text\nseamless\n```\n");
+  assert.deepEqual(load(d).errors, []);
+  writeFileSync(join(d, "docs-src/v.md"), "---\ntitle: V\nsummary: A powerful summary.\nsection: a\n---\n\n| A |\n| --- |\n| Simply this |\n");
+  const e = load(d).errors.join("\n"); assert.ok(e.includes('v.md:1: voice: "powerful"') && e.includes('voice: "Simply"'), e);
+  const h = hubWithProject(); const f = join(h, "ext/tool/docs-src/extras/more.md"); writeFileSync(f, readFileSync(f, "utf8") + "\nA seamless tool.\n"); await importAll(h);
+  const p = load(h); assert.deepEqual(p.errors, []); assert.equal(p.projects.length, 2); assert.ok(p.warnings.some((w) => w.includes('voice: "seamless"')));
+  const units = proseOfFile(".. raw:: html\n\n   <p>robust</p>\n\nTitle\n-----\n\nUse ``robust`` here, see `robust <https://robust.test>`_.\n\n- A powerful item\n", { rst: true });
+  assert.deepEqual(units.map((u) => [u.line, checkVoice(u.text).length]), [[5, 0], [8, 0], [10, 1]]);
+});
+test("redirects: a page at the old address sends the reader on", async () => {
+  const d = copy(); const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8")); cfg.redirects = { "old/place": "sub/two", gone: "nope", one: "sub/two" }; cfg.siteUrl = "https://x.test"; writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg));
+  const p = load(d); assert.ok(p.errors.some((e) => e.includes('"one" is the address of a page')) && p.warnings.some((w) => w.includes('"gone" points to "nope"')));
+  delete cfg.redirects.one; writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg)); await buildSite(load(d));
+  const html = readFileSync(join(d, "dist/site/old/place/index.html"), "utf8"); assert.ok(html.includes('content="0; url=../../sub/two/"') && html.includes('href="https://x.test/sub/two/"'));
+  assert.ok(!existsSync(join(d, "dist/site/gone/index.html")));
+});
+
+test("project import: the id comes from the sources entry, then the project's config, then the folder or repository name", async () => {
+  const d = hubWithProject(); const f = join(d, "ext/tool/docs.config.json"); const pc = JSON.parse(readFileSync(f, "utf8")); pc.id = "my-tool"; writeFileSync(f, JSON.stringify(pc));
+  await importAll(d); assert.equal(load(d).projects[1].id, "my-tool"); assert.ok(existsSync(join(d, "docs-src/_imported/my-tool/guides/setup.md")));
+  const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8")); cfg.sources[0].id = "other"; writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg));
+  await importAll(d); assert.equal(load(d).projects[1].id, "other"); assert.ok(!existsSync(join(d, "docs-src/_imported/my-tool")));
 });

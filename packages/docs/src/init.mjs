@@ -10,7 +10,8 @@ export function init(dir) {
   const name = (pkg?.name ?? basename(root)).replace(/^@[^/]+\//, "").replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
   // no sections in the config: the folders start, guides, reference, concepts and develop are sections with fixed titles
   const repo = typeof pkg?.repository === "string" ? pkg.repository : pkg?.repository?.url; const url = /github\.com[/:]([\w.-]+\/[\w.-]+?)(\.git)?$/.exec(repo ?? "")?.[1];
-  const config = { project: name, description: pkg?.description || "What this project does, in one sentence.", ...(pkg ? { versionFrom: "package.json" } : {}), ...(url ? { repo: `https://github.com/${url}` } : {}) };
+  const id = (pkg?.name ?? basename(root)).replace(/^@[^/]+\//, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const config = { project: name, id, description: pkg?.description || "What this project does, in one sentence.", ...(pkg ? { versionFrom: "package.json" } : {}), ...(url ? { repo: `https://github.com/${url}` } : {}) };
   writeFileSync(cfg, JSON.stringify(config, null, 2) + "\n");
   const page = (file, head, body) => { const f = join(root, "docs-src", file); mkdirSync(join(f, ".."), { recursive: true }); writeFileSync(f, `---\n${head}\n---\n\n${body}\n`); };
   page("index.md", `title: ${name}\nsummary: ${config.description}`, "Say what the project is for in two or three sentences, and who it is for.");

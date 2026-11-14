@@ -106,7 +106,7 @@ export function readProject(dir, src, ref) {
   }
   let version = typeof pc.version === "string" ? pc.version : "";
   if (!version && pc.versionFrom && existsSync(join(dir, pc.versionFrom))) { try { version = String(JSON.parse(readFileSync(join(dir, pc.versionFrom), "utf8")).version ?? ""); } catch { /* not JSON: no version */ } }
-  const project = { title: src.title ?? pc.project, summary: src.summary ?? pc.description ?? lead, icon: src.icon ?? pc.icon, version, sections: src.sections ?? pc.sections ?? [], glossary: pc.glossary ?? {} };
+  const project = { id: pc.id, title: src.title ?? pc.project, summary: src.summary ?? pc.description ?? lead, icon: src.icon ?? pc.icon, version, sections: src.sections ?? pc.sections ?? [], glossary: pc.glossary ?? {} };
   return { project, pages };
 }
 
@@ -134,8 +134,7 @@ export async function runImport(config, root, log = console.log) {
   const rel = designRelease(root);
   try {
     for (const src of sources) {
-      const name = src.repo ?? basename(resolve(root, src.path)); const id = src.id ?? slugId(name.split("/").pop());
-      if (projects.some((p) => p.id === id)) throw new Error(`${name}: the project id "${id}" is used twice; set "id" on one entry of sources`);
+      const name = src.repo ?? basename(resolve(root, src.path));
       // JUPITER_IMPORT_REF forces one ref for every source (testing a build that is not released yet). The design repository
       // is read at the release the design files were downloaded from, so the site is consistent.
       const fixed = process.env.JUPITER_IMPORT_REF || (src.ref && src.ref !== "latest" ? src.ref : rel?.repo === src.repo && rel.tag ? rel.tag : null);
@@ -160,6 +159,9 @@ export async function runImport(config, root, log = console.log) {
           log(`warning: ${name}@${ref} is left out: ${e.message}`); continue;
         }
       }
+      // the id is the first part of the project's addresses: the sources entry, then the project's own config, then the repository name
+      const id = src.id ?? (/^[a-z0-9][a-z0-9-]*$/.test(project.id ?? "") ? project.id : slugId(name.split("/").pop())); delete project.id;
+      if (projects.some((p) => p.id === id)) throw new Error(`${name}: the project id "${id}" is used twice; set "id" on one entry of sources`);
       if (!project.version && /^v?\d+\.\d+/.test(ref)) project.version = ref.replace(/^v/, "");
       if (!pages.has("index.md")) pages.set("index.md", page({ title: project.title, summary: project.summary || `Documentation of ${project.title}.` }, ""));
       for (const [file, text] of pages) { const f = join(out, id, file); mkdirSync(join(f, ".."), { recursive: true }); writeFileSync(f, text); }

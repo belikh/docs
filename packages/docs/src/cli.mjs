@@ -7,6 +7,7 @@ const HELP = `jupiter-docs: one Markdown source, three outputs (site, repo Markd
   jupiter-docs build [--md] [--site] [--pdf]   build outputs (default: --md --site)
   jupiter-docs build --check               fail when the generated Markdown is out of date
   jupiter-docs import                      fetch the projects named by sources and discover in the config (docs-src/_imported)
+  jupiter-docs voice <file>...             check the wording of a README, a skill or any Markdown or .rst file (--strict: warnings fail too)
   jupiter-docs init [dir]                  scaffold docs-src and docs.config.json
 
 Options: --config <file> (default docs.config.json)`;
@@ -31,6 +32,13 @@ export async function main(argv) {
     const { loadConfig } = await import("./config.mjs"); const { runImport } = await import("./import.mjs"); const { config, root, errors } = loadConfig(configFile);
     if (!config) { for (const e of errors) console.error(`error: ${e}`); return 1; }
     try { const r = await runImport(config, root); console.log(`import: ${r.projects} project(s), ${r.pages} page(s)`); return 0; } catch (e) { console.error(`error: ${e.message}`); return 1; }
+  }
+  if (cmd === "voice") {
+    if (!rest.length) { console.error("voice: name at least one file, for example: jupiter-docs voice README.rst"); return 1; }
+    const { checkVoiceFiles } = await import("./voice.mjs"); let r;
+    try { r = checkVoiceFiles(rest); } catch (e) { console.error(`error: ${e.message}`); return 1; }
+    if (print(r, flags.has("strict"))) { console.error(`${r.errors.length} error(s), ${r.warnings.length} warning(s)`); return 1; }
+    console.log(`${rest.length} file(s) OK`); return 0;
   }
   if (cmd !== "check" && cmd !== "build") { console.error(`unknown command "${cmd}"\n\n${HELP}`); return 1; }
   const project = loadProject(configFile);

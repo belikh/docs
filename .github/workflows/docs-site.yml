@@ -42,10 +42,17 @@ jobs:
       - name: Build the PDF, check its fonts and put it and a cover preview in the site
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        # A project can bring a character the fonts cannot draw, which stops the PDF. The site must still be published:
+        # keep the PDF that is live now and mark the run with an error. The ci workflow fails on the same problem.
         run: |
-          npm run build:pdf
-          cp dist/jupiter-docs.pdf dist/site/jupiter-docs.pdf
-          pdftoppm -r 70 -f 1 -l 1 -png -singlefile dist/jupiter-docs.pdf dist/site/jupiter-docs
+          if npm run build:pdf; then
+            cp dist/jupiter-docs.pdf dist/site/jupiter-docs.pdf
+            pdftoppm -r 70 -f 1 -l 1 -png -singlefile dist/jupiter-docs.pdf dist/site/jupiter-docs
+          else
+            echo "::error::The PDF did not build. The site is published with the PDF that was live before this run."
+            curl -fsSL https://docs.jupiter.au/jupiter-docs.pdf -o dist/site/jupiter-docs.pdf
+            curl -fsSL https://docs.jupiter.au/jupiter-docs.png -o dist/site/jupiter-docs.png
+          fi
       - name: Fail if the SGI fonts were not bundled
         run: ls dist/site/assets/fonts | grep -qi "sgi-text"
       - run: touch dist/site/.nojekyll

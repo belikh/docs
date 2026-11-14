@@ -10,6 +10,8 @@ The documentation site of every jupiter.au project (docs.jupiter.au), its PDF an
 - A project registers by committing `docs.config.json` and `docs-src` to its own repository (`docs-src/adding-a-project.md`). Only add a `sources` entry for a repository that `discover` cannot find or that needs a fixed `ref` or `id`.
 - A change to the source format changes `packages/docs/src/spec.mjs`, `skill/SKILL.md` and `docs-src/writing-documentation.md` together; `npm run lint` checks the first two.
 - README.rst follows the `github-readme` skill, which lives here in `skill-readme/SKILL.md`. Plain wording: no slogans, no "X, not Y", no emoji.
+- All prose follows `skill/VOICE.md`. `npm run lint` runs the voice check on README.rst, AGENTS.md, the skills and the package README; `npm run check` runs it on `docs-src`. A new entry in `VOICE` of `packages/docs/src/spec.mjs` is also shown in `VOICE.md`.
+- A published address does not change. When a page moves, add the old address to `redirects` in `docs.config.json`.
 - Commits are authored by `belikh <io@belic.net>` with no attribution lines. The body has a "Why:" paragraph.
 
 ## Commands
