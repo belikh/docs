@@ -1,4 +1,4 @@
-# Publishes https://docs.jupiter.au (GitHub Pages) from this repository and the latest belikh/design release.
+# Publishes https://docs.jupiter.au (GitHub Pages) from this repository, the projects it imports and the latest belikh/design release.
 # Runs on a push, every day, by hand, and on a repository_dispatch event: design-released from the design repository,
 # docs-changed from any project. A new release of the design system or of a project changes the site without a commit here.
 name: docs-site
@@ -28,31 +28,30 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/update-design.mjs --require-fonts   # the SGI and JetBrains Mono web fonts must be in the release
-      - name: Import the projects, validate and build the site
-        env:
-          GITHUB_TOKEN: ${{ github.token }}   # the import lists the owner's repositories through the API (discover)
-        run: |
-          npm run check
-          npm run build:site
-      - name: Install TeX Live   # for the PDF the site offers; the class loads our fonts from the design bundle, so no font packages
+      - name: Install TeX Live   # one PDF per project; the class loads our fonts from the design bundle, so no font packages
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends texlive-xetex texlive-latex-recommended texlive-latex-extra \
             texlive-pictures texlive-fonts-recommended poppler-utils librsvg2-bin
-      - name: Build the PDF, check its fonts and put it and a cover preview in the site
+      - name: Validate the source and build the PDFs (one per project), check their fonts
+        id: pdf
+        continue-on-error: true   # a character the fonts cannot draw stops one PDF; the site is still published
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # the import lists the owner's repositories through the API (discover)
+        run: |
+          npm run check
+          npm run build:pdf
+      - name: Keep the last published PDF of a project whose PDF did not build
+        if: steps.pdf.outcome == 'failure'
+        run: |
+          echo "::error::A PDF did not build. Its project keeps the PDF that is live now until the error is fixed."
+          node scripts/fetch-previous-pdfs.mjs
+      - name: Build the site, with a cover preview of the hub PDF
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        # A project can bring a character the fonts cannot draw, which stops the PDF. The site must still be published:
-        # keep the PDF that is live now and mark the run with an error. The ci workflow fails on the same problem.
         run: |
-          if npm run build:pdf; then
-            cp dist/jupiter-docs.pdf dist/site/jupiter-docs.pdf
-            pdftoppm -r 70 -f 1 -l 1 -png -singlefile dist/jupiter-docs.pdf dist/site/jupiter-docs
-          else
-            echo "::error::The PDF did not build. The site is published with the PDF that was live before this run."
-            curl -fsSL https://docs.jupiter.au/jupiter-docs.pdf -o dist/site/jupiter-docs.pdf
-            curl -fsSL https://docs.jupiter.au/jupiter-docs.png -o dist/site/jupiter-docs.png
-          fi
+          npm run build:site
+          if [ -f dist/jupiter-docs.pdf ]; then pdftoppm -r 70 -f 1 -l 1 -png -singlefile dist/jupiter-docs.pdf dist/site/jupiter-docs; fi
       - name: Fail if the SGI fonts were not bundled
         run: ls dist/site/assets/fonts | grep -qi "sgi-text"
       - run: touch dist/site/.nojekyll

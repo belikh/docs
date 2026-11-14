@@ -64,7 +64,7 @@ export const CONFIG_KEYS = {
   graphicsUrl: "string: URL template for graphics in generated Markdown: {root} {tier} {name} {theme}",
   latexDir: "string: a directory holding jupiter-docs.cls (monorepo packages/latex, or an unpacked jupiter-latex.tgz)",
   author: "string: author line on the PDF cover",
-  pdf: "string: file name of the published PDF in the site root (for example jupiter-docs.pdf); adds a PDF link to the top bar and the landing page",
+  pdf: "string: file name of this project's PDF (default {id}.pdf). Every project gets one; its pages link to it when build --pdf has written it",
   sources: "list of projects whose pages jupiter-docs import fetches. { repo } reads the docs.config.json and source folder of that repository. { repo, files, sections } lists hand-written Markdown files instead: files maps a repo path to { id, title, summary, section, order, icon, audience, status }. Optional on both: ref (a tag, a branch or latest: the newest release, or the default branch when there is none), id, title, summary, icon. { path } reads a local folder",
   redirects: "object: an old address to a page id, for example { \"consuming\": \"design/consuming\" }. The site keeps a page at the old address that sends the reader to the new one",
   discover: "{ owner, exclude? }: every public repository of this GitHub user or organisation that has a docs.config.json at its root is imported as a project; exclude lists repository names to leave out",

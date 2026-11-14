@@ -147,8 +147,10 @@ test("project import: pages keep their folders, sections come from folders, link
   assert.ok(!page.includes('rel="prev"') && page.includes('rel="next"'), "previous and next stay inside the project");
   assert.ok(readFileSync(join(s, "llms.txt"), "utf8").includes("## Tool v2.1.0\n\nA tool.\n\n- [Set up](https://x.test/tool/guides/setup/): Steps."));
   assert.ok(readFileSync(join(s, "sitemap.xml"), "utf8").includes("<loc>https://x.test/tool/</loc>"));
-  const t = texWriter({ pages: p.pages, config: p.config }).document({ nav: p.nav, projects: p.projects, date: "1 Jan 2026" });
-  assert.ok(t.includes("\\jpintro{Tool}") && t.includes("\\jpdocsection{Tool: Guides}{Steps for one task each.}"));
+  // one PDF per project: the project's own pages and cover, and links to another project's pages as plain text
+  const t = texWriter({ pages: p.pages, config: p.config, only: tool }).document({ nav: tool.nav, intro: tool.index, date: "1 Jan 2026", version: "v2.1.0", cover: { title: tool.title, subtitle: tool.summary, repo: tool.url } });
+  assert.ok(t.includes("\\title{Tool}") && t.includes("\\jpintro{Tool}") && t.includes("\\jpdocsection{Guides}{Steps for one task each.}"));
+  assert.ok(!t.includes("Design system") && !t.includes("\\hyperlink{page:one}") && t.includes("One"), "a page of another project is plain text, not a link");
 });
 test("a project with errors is left out with a warning; the rest of the site still builds", async () => {
   const d = hubWithProject({ bad: true }); await importAll(d); const p = load(d);
@@ -197,4 +199,20 @@ test("project import: the id comes from the sources entry, then the project's co
   await importAll(d); assert.equal(load(d).projects[1].id, "my-tool"); assert.ok(existsSync(join(d, "docs-src/_imported/my-tool/guides/setup.md")));
   const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8")); cfg.sources[0].id = "other"; writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg));
   await importAll(d); assert.equal(load(d).projects[1].id, "other"); assert.ok(!existsSync(join(d, "docs-src/_imported/my-tool")));
+});
+
+test("site: each page links to its own project's PDF and repository; the home page has no PDF link", async () => {
+  const d = hubWithProject(); await importAll(d); const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8")); cfg.repo = "https://github.com/belikh/docs"; writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg));
+  mkdirSync(join(d, "dist"), { recursive: true }); writeFileSync(join(d, "dist/fixture.pdf"), "%PDF hub"); writeFileSync(join(d, "dist/tool.pdf"), "%PDF tool");
+  await buildSite(load(d)); const s = join(d, "dist/site");
+  assert.equal(readFileSync(join(s, "tool/tool.pdf"), "utf8"), "%PDF tool"); assert.equal(readFileSync(join(s, "fixture.pdf"), "utf8"), "%PDF hub");
+  const home = readFileSync(join(s, "index.html"), "utf8"); assert.ok(!home.includes(".pdf") && !home.includes("Download the PDF") && home.includes('href="https://github.com/belikh/docs"'), "home page: no PDF, the hub repository");
+  const hubPage = readFileSync(join(s, "one/index.html"), "utf8"); assert.ok(hubPage.includes('href="../fixture.pdf"') && hubPage.includes('href="https://github.com/belikh/docs"') && !hubPage.includes("tool/tool.pdf"), "a hub page links to the hub PDF and the hub repository");
+  const toolPage = readFileSync(join(s, "tool/guides/setup/index.html"), "utf8"); assert.ok(toolPage.includes('href="../../tool.pdf"') && toolPage.includes('href="https://github.com/belikh/docs"') === false && toolPage.includes('href="https://github.com/belikh/ext/tool"') === false, "project page: its own PDF");
+  const landing = readFileSync(join(s, "tool/index.html"), "utf8"); assert.ok(landing.includes('href="tool.pdf"') && landing.includes("Download the PDF"));
+  assert.ok(!existsSync(join(s, "design/design.pdf")), "no PDF was built for design, so none is linked");
+});
+test("site: without a PDF file there is no PDF link anywhere", async () => {
+  const d = hubWithProject(); await importAll(d); await buildSite(load(d));
+  assert.ok(!readFileSync(join(d, "dist/site/tool/index.html"), "utf8").includes("Download the PDF"));
 });

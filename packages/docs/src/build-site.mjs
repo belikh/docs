@@ -5,6 +5,7 @@ import { dirname, join, extname } from "node:path";
 import { htmlWriter, esc, makeUrl, pageHref, pageDir } from "./write-html.mjs";
 import { plain, visit } from "./parse.mjs";
 import { designRelease, graphicSvg, logos, packageRoot, pkgDir, readCss } from "./resolve.mjs";
+import { pdfFileName } from "./build-pdf.mjs";
 
 const hash = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 10);
 const THEME_SCRIPT = `(function(){try{var q=new URLSearchParams(location.search).get("theme");var m=q||localStorage.getItem("jp-theme");if(m==="light"||m==="dark")document.documentElement.setAttribute("data-theme",m);if(localStorage.getItem("jp-density")==="compact")document.documentElement.setAttribute("data-density","compact")}catch(e){}})();`;
@@ -52,12 +53,19 @@ export async function buildSite(project) {
   const index = pages.map((p) => ({ u: dirOf(p), t: p.meta.title, s: p.meta.summary, sec: [p.project.local ? "" : p.project.title, p === p.project.index ? "" : sectionOf(p)?.title].filter(Boolean).join(" / "), h: p.headings.filter((h) => h.depth > 1).map((h) => h.text), x: textOf(p) }));
   hashed(out, assets, "search.json", JSON.stringify(index));
 
+  // PDFs: a project links to its own PDF when the PDF exists in pdfOut (built by jupiter-docs build --pdf before the site)
+  const pdfRel = (pr) => (pr.local ? pdfFileName(config, pr) : `${pr.id}/${pdfFileName(config, pr)}`);
+  const pdfs = new Set(projects.filter((pr) => pr.nav.length && existsSync(join(root, config.pdfOut, pdfFileName(config, pr)))));
+  for (const pr of pdfs) emit(out, pdfRel(pr), readFileSync(join(root, config.pdfOut, pdfFileName(config, pr))));
   const w = htmlWriter({ pages, config, root }); const version = config.version ? `v${config.version}` : "";
   const design = designRelease(root);
   const spot = (ref, cls = "") => { const s = graphicSvg(ref, root); return s ? `<span class="${cls}">${s}</span>` : ""; };
 
   function layout({ page, title, desc, main, toc = [], wide = false, url, rootRel }) {
     const a = (k) => url(assets[k]); const home = url("");
+    // the top bar names the project of the page: its PDF (not on the home page) and its repository
+    const here = page?.project ?? hub; const repo = here.local ? config.repo : here.url; const pdfHere = page && page.id !== "index" && pdfs.has(here) ? url(pdfRel(here)) : "";
+    const topLinks = `${pdfHere ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(pdfHere)}">PDF</a>` : ""}${repo ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(repo)}" rel="noopener">Source</a>` : ""}`;
     // the navigation of the page's project, then the list of projects
     const pr = page?.project ?? hub; const cur = (on, v = "page") => (on ? ` aria-current="${v}"` : "");
     const navHtml = [
@@ -88,7 +96,7 @@ ${preload.map((f) => `<link rel="preload" href="${url(f)}" as="font" type="font/
 <span class="dx-top__sp"></span>
 <form class="dx-search" role="search" onsubmit="return false"><input type="search" aria-label="Search the docs" placeholder="Search" autocomplete="off"><kbd aria-hidden="true">/</kbd><div class="dx-results" role="region" aria-label="Search results" aria-live="polite" hidden></div></form>
 <button class="jp-btn jp-btn--ghost jp-btn--sm" type="button" data-theme-toggle>Auto</button>
-${config.pdf ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${home}${esc(config.pdf)}">PDF</a>` : ""}${config.repo ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}
+${topLinks}
 ${logo ? `<a class="dx-logo dx-top__logo" href="${home}" aria-label="${esc(config.project)}: home"><img class="dx-logo__light" src="${a("logo-light.svg")}" alt=""><img class="dx-logo__dark" src="${a("logo-dark.svg")}" alt=""></a>` : ""}
 </div></header>
 <div class="jp-container dx-shell${wide ? " dx-shell--wide" : ""}">
@@ -120,7 +128,7 @@ ${wide ? "" : tocHtml}
     if (page.id === "index") {
       // the home page: the projects first, then the sections of this repository
       const first = hub.nav[0]?.pages[0] ?? others.find((o) => o.index)?.index; const art = config.hero ? graphicSvg(config.hero, root) : "";
-      main = `<div class="dx-hero"><div><p class="jp-eyebrow">${esc(others.length ? nPages(pages.length - 1) + " in " + others.length + (others.length === 1 ? " project" : " projects") : version || "documentation")}</p><h1 class="dx-hero__title">${esc(config.project)}</h1><p class="dx-hero__lead">${esc(config.description || page.meta.summary)}</p><div class="dx-hero__act">${first ? `<a class="jp-btn jp-btn--primary" href="${pageHref(url, first.id)}">Start reading</a>` : ""}${config.pdf ? `<a class="jp-btn jp-btn--secondary" href="${url("")}${esc(config.pdf)}">Download the PDF</a>` : ""}${config.repo ? `<a class="jp-btn jp-btn--secondary" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}</div></div>${art ? `<div class="dx-hero__art" aria-hidden="true">${art}</div>` : ""}</div>
+      main = `<div class="dx-hero"><div><p class="jp-eyebrow">${esc(others.length ? nPages(pages.length - 1) + " in " + others.length + (others.length === 1 ? " project" : " projects") : version || "documentation")}</p><h1 class="dx-hero__title">${esc(config.project)}</h1><p class="dx-hero__lead">${esc(config.description || page.meta.summary)}</p><div class="dx-hero__act">${first ? `<a class="jp-btn jp-btn--primary" href="${pageHref(url, first.id)}">Start reading</a>` : ""}${config.repo ? `<a class="jp-btn jp-btn--secondary" href="${esc(config.repo)}" rel="noopener">Source</a>` : ""}</div></div>${art ? `<div class="dx-hero__art" aria-hidden="true">${art}</div>` : ""}</div>
 <div class="dx-rule" aria-hidden="true">${graphicSvg("rule/end", root) ?? ""}</div>
 ${others.length ? `<h2 class="dx-group">Projects</h2>\n<div class="dx-cards">${projectCards(url)}</div>` : ""}
 ${others.length && hub.nav.length ? `<h2 class="dx-group">${esc(config.project)}</h2>` : ""}
@@ -133,7 +141,7 @@ ${page.tree.length ? `<div class="dx-landing-body">${body(page, url)}</div>` : "
       // the landing page of a project: what it is, where it comes from, its sections
       const meta = [release(pr) && `<span class="jp-badge jp-badge--info">${esc(release(pr))}</span>`, pr.url && `<a href="${esc(pr.url)}" rel="noopener">${esc(pr.repo)}</a>`].filter(Boolean).join("");
       main = `<nav class="dx-crumbs" aria-label="Breadcrumb"><ol><li><a href="${url("")}">Docs</a></li><li aria-current="page">${esc(pr.title)}</li></ol></nav>
-<header class="dx-head"><h1 class="dx-title">${esc(pr.title)}</h1><p class="dx-lead">${esc(pr.summary || page.meta.summary)}</p>${meta ? `<div class="dx-meta">${meta}</div>` : ""}<div class="dx-graphic dx-graphic--rule" aria-hidden="true">${graphicSvg("rule/underline", root) ?? ""}</div></header>
+<header class="dx-head"><h1 class="dx-title">${esc(pr.title)}</h1><p class="dx-lead">${esc(pr.summary || page.meta.summary)}</p>${meta ? `<div class="dx-meta">${meta}</div>` : ""}${pdfs.has(pr) ? `<div class="dx-hero__act"><a class="jp-btn jp-btn--secondary" href="${url(pdfRel(pr))}">Download the PDF</a></div>` : ""}<div class="dx-graphic dx-graphic--rule" aria-hidden="true">${graphicSvg("rule/underline", root) ?? ""}</div></header>
 <div class="dx-cards">${sectionCards(pr, url)}</div>
 ${page.tree.length ? `<div class="dx-landing-body">${body(page, url)}</div>` : ""}`;
       write(`${pageDir(page.id)}/index.html`, layout({ page, title: titleOf(page), desc: pr.summary || page.meta.summary, main, url }));

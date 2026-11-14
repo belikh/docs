@@ -8,7 +8,7 @@ npx jupiter-docs init          # docs.config.json and docs-src/
 npx jupiter-docs check         # validate the source and its wording
 npx jupiter-docs voice README.rst   # check the wording of any other Markdown or .rst file
 npx jupiter-docs build         # docs/*.md and dist/site
-npx jupiter-docs build --pdf   # dist/<id>.pdf (needs xelatex and rsvg-convert)
+npx jupiter-docs build --pdf   # dist/<id>.pdf for each project (needs xelatex and rsvg-convert)
 npx jupiter-docs build --check # fail when docs/*.md is out of date
 ```
 

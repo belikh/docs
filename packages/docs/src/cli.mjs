@@ -4,7 +4,7 @@ import { diffMarkdown, writeMarkdown } from "./build-md.mjs";
 const HELP = `jupiter-docs: one Markdown source, three outputs (site, repo Markdown, PDF)
 
   jupiter-docs check [--strict]            validate the source (exit 1 on errors; --strict also on warnings)
-  jupiter-docs build [--md] [--site] [--pdf]   build outputs (default: --md --site)
+  jupiter-docs build [--md] [--site] [--pdf]   build outputs (default: --md --site); --pdf writes one PDF per project
   jupiter-docs build --check               fail when the generated Markdown is out of date
   jupiter-docs import                      fetch the projects named by sources and discover in the config (docs-src/_imported)
   jupiter-docs voice <file>...             check the wording of a README, a skill or any Markdown or .rst file (--strict: warnings fail too)
@@ -52,6 +52,10 @@ export async function main(argv) {
   const any = flags.has("md") || flags.has("site") || flags.has("pdf"); const want = (k) => flags.has(k) || (!any && k !== "pdf");
   if (want("md")) { const r = writeMarkdown(project); console.log(`markdown: ${r.total} file(s), ${r.written.length} written`); }
   if (want("site")) { const { buildSite } = await import("./build-site.mjs"); const r = await buildSite(project); console.log(`site: ${r.files} file(s) in ${r.out}`); }
-  if (want("pdf")) { const { buildPdf } = await import("./build-pdf.mjs"); const r = await buildPdf(project); console.log(`pdf: ${r.pdf}`); }
+  if (want("pdf")) {
+    const { buildAllPdfs } = await import("./build-pdf.mjs"); const r = await buildAllPdfs(project);
+    for (const f of r.out) console.log(`pdf: ${f.pdf}`);
+    if (r.errors.length) { for (const e of r.errors) console.error(`error: pdf ${e}`); console.error(`${r.errors.length} PDF(s) did not build; the others are written`); return 1; }
+  }
   return 0;
 }
