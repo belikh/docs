@@ -16,7 +16,7 @@ function escText(s, inTable) {
 }
 const fenceFor = (text, ch) => ch.repeat(Math.max(3, ...[...text.matchAll(new RegExp(`${ch === "`" ? "`" : "~"}+`, "g"))].map((m) => m[0].length + 1)));
 
-export function mdWriter({ pages, config, graphicUrl }) {
+export function mdWriter({ pages, config, graphicUrl, diagramUrl }) {
   const byId = new Map(pages.map((p) => [p.id, p]));
   const inl = (nodes, page, tbl) => nodes.map((n) => {
     switch (n.type) {
@@ -64,6 +64,10 @@ export function mdWriter({ pages, config, graphicUrl }) {
         const u = (theme) => graphicUrl(n.ref, theme, page);
         return `<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="${u("dark")}"><img alt="${alt}" src="${u("light")}" width="${WIDTH[tier] ?? "200"}"></picture></p>`;
       }
+      case "diagram": {
+        const alt = (n.alt || "").replace(/"/g, "&quot;"); const u = (theme) => diagramUrl(n.name, theme, page);
+        return `<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="${u("dark")}"><img alt="${alt}" src="${u("light")}"></picture></p>`;
+      }
       case "glossary": return Object.entries(page.project.glossary).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `- <a id="term-${slug(k)}"></a>**${escText(k)}**: ${escText(v)}`).join("\n");
       default: return null;
     }
@@ -75,6 +79,11 @@ export function mdWriter({ pages, config, graphicUrl }) {
       return `<!-- ${MARKER} from ${src}. Do not edit; change the source and run jupiter-docs build. -->\n\n# ${escText(page.meta.title)}\n\n${blk(page.tree, page)}\n`;
     },
   };
+}
+
+/** Where the baked light and dark files of a diagram are, relative to the page: <mdOut>/diagrams/<name>-<theme>.svg. */
+export function diagramUrlFor() {
+  return (name, theme, page) => posix.relative(posix.dirname(mdPath(page.id)), `diagrams/${name}-${theme}.svg`);
 }
 
 export function graphicUrlFor(config, mdOutDir) {

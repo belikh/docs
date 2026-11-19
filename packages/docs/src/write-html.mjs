@@ -3,7 +3,8 @@ import { posix } from "node:path";
 import { CALLOUTS } from "./spec.mjs";
 import { plain, slug } from "./parse.mjs";
 import { graphicSvg } from "./resolve.mjs";
-import { findTerm } from "./source.mjs";
+import { findDiagram, findTerm } from "./source.mjs";
+import { inlineDiagram, readDiagram } from "./diagram.mjs";
 
 export const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 /** The folder a page is published in: index pages take the folder itself ("index" is "", "design/index" is "design"). */
@@ -67,6 +68,10 @@ export function htmlWriter({ pages, config, root }) {
       case "graphic": {
         const svg = graphicSvg(n.ref, root); const tier = n.ref.split("/")[0]; if (!svg) return "";
         return `<figure class="dx-graphic dx-graphic--${tier}"${n.alt ? ` role="img" aria-label="${esc(n.alt)}"` : ""}>${svg}</figure>`;
+      }
+      case "diagram": {
+        const d = findDiagram(page, n.name); const svg = d ? inlineDiagram(readDiagram(d.file), `${page.project.id}/${n.name}`) : "";
+        return svg ? `<figure class="dx-diagram" role="img" aria-label="${esc(n.alt)}">${svg}</figure>` : "";
       }
       case "glossary": return `<dl class="dx-glossary">\n${Object.entries(page.project.glossary).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `<dt id="term-${slug(k)}">${esc(k)}</dt><dd>${esc(v)}</dd>`).join("\n")}\n</dl>`;
       default: return "";

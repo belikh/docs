@@ -2,7 +2,7 @@
 //
 // Block nodes:  heading{depth,children,id} paragraph{children} list{ordered,start,tight,items:[[block]]} quote{children}
 //               codeblock{lang,title,text} table{align,head:[[inline]],rows:[[[inline]]]} hr callout{kind,title,children}
-//               seealso{children} graphic{ref,alt} glossary html{value}
+//               seealso{children} graphic{ref,alt} diagram{name,alt} glossary html{value}
 // Inline nodes: text code em strong del link{href,children} xref{id,anchor,text,children} term{key,text} softbreak hardbreak image{src,alt}
 // Every block has `line` (1-based, within the file body).
 import MarkdownIt from "markdown-it";
@@ -136,6 +136,7 @@ function blocks(tokens, i, stop, lineBase) {
       case "directive_leaf": {
         const { name, arg } = t.meta;
         if (name === "graphic") { const m = /^(\S+)(?:\s+(.*))?$/.exec(arg); out.push({ type: "graphic", ref: m?.[1] ?? "", alt: m?.[2]?.trim() ?? "", line: line(t) }); }
+        else if (name === "diagram") { const m = /^(\S+)(?:\s+(.*))?$/.exec(arg); out.push({ type: "diagram", name: m?.[1] ?? "", alt: m?.[2]?.trim() ?? "", line: line(t) }); }
         else if (name === "glossary") out.push({ type: "glossary", line: line(t) });
         else out.push({ type: "unknown-directive", name, line: line(t) });
         i++; break;

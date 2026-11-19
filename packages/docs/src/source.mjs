@@ -4,6 +4,7 @@ import { join, posix, relative, sep } from "node:path";
 import YAML from "yaml";
 import { parseBody, visit, plain } from "./parse.mjs";
 import { STANDARD_SECTIONS } from "./spec.mjs";
+import { isFolder } from "./config.mjs";
 
 const walk = (dir) => readdirSync(dir).sort().flatMap((n) => { const p = join(dir, n); return statSync(p).isDirectory() ? walk(p) : p.endsWith(".md") ? [p] : []; });
 
@@ -12,6 +13,12 @@ export function splitFrontMatter(text) {
   if (!m) return { meta: {}, body: text, lineBase: 0, error: "missing front matter (--- block with title and summary)" };
   try { const meta = YAML.parse(m[1]) ?? {}; return { meta: typeof meta === "object" && !Array.isArray(meta) ? meta : {}, body: text.slice(m[0].length), lineBase: m[0].split("\n").length - 1, error: null }; }
   catch (e) { return { meta: {}, body: text.slice(m[0].length), lineBase: m[0].split("\n").length - 1, error: `front matter is not valid YAML: ${e.message.split("\n")[0]}` }; }
+}
+
+/** The SVG file of `::diagram name` for a page: { file } in the first of its project's diagram folders that has it, or null. */
+export function findDiagram(page, name) {
+  for (const dir of page.project.diagramDirs ?? []) { const file = join(dir, `${name}.svg`); if (existsSync(file)) return { file }; }
+  return null;
 }
 
 const titleCase = (s) => s.replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -34,10 +41,15 @@ export function loadPages(root, config, skip = new Set()) {
   const manifest = join(srcDir, "_imported/projects.json");
   const listed = existsSync(manifest) ? JSON.parse(readFileSync(manifest, "utf8")) : [];
   const make = (p) => ({ ...p, sections: (p.sections ?? []).map((s) => ({ ...s })), glossary: p.glossary ?? {}, pages: [] });
-  const hub = make({ id: "", title: config.project, summary: config.description ?? "", sections: config.sections, glossary: config.glossary, local: true });
+  const hub = make({ id: "", diagrams: config.diagrams, title: config.project, summary: config.description ?? "", sections: config.sections, glossary: config.glossary, local: true });
   const projects = [hub, ...listed.filter((p) => !skip.has(p.id)).map(make)];
   const byPid = new Map(projects.map((p) => [p.id, p]));
-  for (const pr of projects) pr.hub = hub;
+  for (const pr of projects) {
+    pr.hub = hub;
+    // the folders that hold this project's diagrams, as absolute paths: its own source folder, or the folder `import` wrote
+    const base = pr.local ? srcDir : join(srcDir, "_imported", pr.id);
+    pr.diagramDirs = (Array.isArray(pr.diagrams) ? pr.diagrams.filter(isFolder) : pr.local ? (config.diagrams ?? ["diagrams"]) : ["diagrams"]).map((d) => join(base, d));
+  }
   for (const f of walk(srcDir)) {
     const rel = relative(srcDir, f).split(sep).join("/"); const id = rel.replace(/\.md$/, "").replace(/^_imported\//, "");
     const first = rel.startsWith("_imported/") ? id.split("/")[0] : ""; if (first && skip.has(first)) continue;

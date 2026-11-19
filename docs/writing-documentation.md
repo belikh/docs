@@ -76,15 +76,16 @@ A title is optional. The kinds are note, tip, warning and danger.
 
 One-line directives start with two colons.
 
-**Graphics and the glossary**
+**Graphics, diagrams and the glossary**
 
 ```markdown
 ::graphic rule/end
 ::graphic spot/summit A mountain with a flag on the summit
+::diagram wiring/board-to-monitor The board's GPIO 4 goes to pin 7 of the monitor
 ::glossary
 ```
 
-`::graphic tier/name` places a graphic from `@belikh/jupiter-graphics`. Text after the name is the alt text; leave it out for a decorative graphic. The site draws it inline in the theme colour, the repository Markdown uses a light and dark `<picture>`, and the PDF uses a coloured copy. `::glossary` lists every term from the glossary in `docs.config.json`.
+`::graphic tier/name` places a graphic from `@belikh/jupiter-graphics`. Text after the name is the alt text; leave it out for a decorative graphic. The site draws it inline in the theme colour, the repository Markdown uses a light and dark `<picture>`, and the PDF uses a coloured copy. `::diagram name Alt text` places a drawing that your project made itself, see [Add a diagram](#add-a-diagram). `::glossary` lists every term from the glossary in `docs.config.json`.
 
 ## Links
 
@@ -134,6 +135,7 @@ jupiter-docs init               # scaffold docs-src in a new project
 `check` names the file and line of each problem:
 
 - a missing title or summary, or an unknown section, graphic, icon or glossary term
+- a diagram that is missing, has no alt text, or breaks the drawing rules
 - a broken page link or anchor
 - a heading that skips a level, an unclosed directive, a code block without a language
 - wording that fails the voice rules (see [Voice](#voice))
@@ -187,3 +189,32 @@ Graphics come only from `@belikh/jupiter-graphics`. If the set lacks one, add it
 
 - [Add a project](adding-a-project.md)
 - [Glossary](glossary.md)
+
+## Add a diagram
+
+A diagram is line art that your project draws itself, for a figure the graphics set does not have: a wiring plan, a timing chart, a state machine. Write it as an SVG file and place it with `::diagram name Alt text`. The name is the path of the file below a diagram folder, without `.svg`. The folder is `diagrams` below the source folder, and `diagrams` in `docs.config.json` lists other folders:
+
+**docs.config.json**
+
+```json
+{ "diagrams": ["diagrams", "figures"] }
+```
+
+`::diagram wiring/board-to-monitor` reads `docs-src/diagrams/wiring/board-to-monitor.svg`. The alt text is required, because a diagram is never decoration.
+
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="diagrams/three-outputs-dark.svg"><img alt="One source reaches three outputs. Pages and SVG diagrams go into jupiter-docs. The site gets the diagram inline in the theme colour, the Markdown gets a light and a dark file, and the PDF gets the light file drawn with the design system's fonts." src="diagrams/three-outputs-light.svg"></picture></p>
+
+The diagram follows the design system's rules for line art, and `jupiter-docs check` tests them:
+
+| Rule | What to do |
+| --- | --- |
+| Size | Give the `<svg>` a `viewBox` at most 720 wide, and keep the file under 100 KB. |
+| Elements | Use `svg`, `g`, `defs`, `marker`, `title`, `desc`, `text`, `tspan`, `path`, `line`, `polyline`, `polygon`, `rect`, `circle` and `ellipse`. |
+| Lines | Set `fill="none"`, `stroke="currentColor"` and one `stroke-width` between 1 and 3 on the `<svg>`. Shapes have no fills. |
+| Colour | Use `currentColor`, `none` or `var(--jp-NAME)`, where `NAME` is `text`, `text-muted`, `border`, `accent`, `ok`, `warn`, `danger` or `info`. Never a hex value, and no opacity. |
+| Text | Do not set `font-family`. Diagram text is JetBrains Mono. A size of 13 or 14 units is readable in the PDF. |
+| Nothing else | No gradients, filters, shadows, images, scripts, `style` attributes or links to other files. |
+
+Text is filled and has no outline, whatever the `<svg>` sets. A marker does not inherit the colour of the line that uses it, so set `stroke` on the marker's own path.
+
+On the site the SVG is inlined, so it follows the light and dark theme. For the Markdown output `jupiter-docs build` writes `docs/diagrams/<name>-light.svg` and `-dark.svg` and draws them with a `<picture>`, so commit them with the pages. The PDF build converts the light file with `rsvg-convert` and fails when that tool is missing, so a PDF never loses a diagram. A project's diagram folders are imported with its pages, so its diagrams appear on docs.jupiter.au.
