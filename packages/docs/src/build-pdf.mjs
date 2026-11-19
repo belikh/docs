@@ -6,6 +6,9 @@ import { join, resolve } from "node:path";
 import { texWriter } from "./write-tex.mjs";
 import { visit } from "./parse.mjs";
 import { designDir, graphicSvg, packageRoot, resolveFile } from "./resolve.mjs";
+import { bakeDiagram, diagramSlug, readDiagram, tokenColours } from "./diagram.mjs";
+import { findDiagram } from "./source.mjs";
+import { relative, sep } from "node:path";
 
 /** Find the LaTeX files: the jupiter-docs.cls of this project (latex/ next to the config, or the one shipped in this package), and the design
  *  system's jupiter-latex bundle (jupiter.sty, jupiter-tokens.sty, fonts, graphics) from config.latexDir, $JUPITER_LATEX_DIR or vendor/design/latex.
@@ -35,6 +38,17 @@ function svgToPdf(svg, outFile, colour) {
   if (r.status !== 0) throw new Error(`rsvg-convert failed: ${r.stderr}`);
 }
 
+/**
+ * Draw a baked diagram into a one-page PDF. rsvg-convert looks up the text font through fontconfig, so it is given a configuration
+ * that sees only the design system's fonts: the diagram text embeds as JetBrains Mono, and no other font can be used by accident.
+ */
+function diagramToPdf(svg, outFile, fontDir, work) {
+  const conf = join(work, "fonts.conf");
+  writeFileSync(conf, `<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n<fontconfig>\n  <dir>${fontDir}</dir>\n  <cachedir>${join(work, "fontcache")}</cachedir>\n</fontconfig>\n`);
+  const r = spawnSync("rsvg-convert", ["-f", "pdf", "-o", outFile], { input: svg, env: { ...process.env, FONTCONFIG_FILE: conf }, encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`rsvg-convert failed for a diagram: ${r.stderr || r.error?.message}`);
+}
+
 /** Build the PDF of one project: `only` is a project from project.projects (default: the hub). Returns { pdf, project, fonts }. */
 export async function buildPdf(project, { only = null, date } = {}) {
   const { config, root, pages, projects } = project;
@@ -51,6 +65,14 @@ export async function buildPdf(project, { only = null, date } = {}) {
   else {
     const refs = new Set(["rule/end"]); for (const p of pages) visit(p.tree, (n) => { if (n.type === "graphic") refs.add(n.ref); });
     for (const ref of refs) { const svg = graphicSvg(ref, root); if (svg) svgToPdf(svg, join(work, `jpg-${ref.replace("/", "-")}.pdf`), accent); }
+  }
+  // diagrams: baked for the light theme and drawn by rsvg-convert. A PDF never leaves one out: if the tool is missing the build fails.
+  const diagrams = new Map();
+  for (const p of pr.pages) visit(p.tree, (n) => { if (n.type === "diagram" && !diagrams.has(diagramSlug(n.name))) { const f = findDiagram(p, n.name); if (f) diagrams.set(diagramSlug(n.name), { file: f.file, name: n.name }); } });
+  if (diagrams.size) {
+    if (!need("rsvg-convert")) throw new Error(`rsvg-convert not found (librsvg2-bin): the PDF would be built without its ${diagrams.size} diagram(s). Install it, or remove the ::diagram directives`);
+    const colours = tokenColours(root);
+    for (const [slug, { file }] of diagrams) diagramToPdf(bakeDiagram(readDiagram(file), "light", colours, relative(root, file).split(sep).join("/")), join(work, `jpd-${slug}.pdf`), latex.fontDir, work);
   }
   const d = date ?? (process.env.SOURCE_DATE_EPOCH ? new Date(Number(process.env.SOURCE_DATE_EPOCH) * 1000) : new Date());
   const dateText = d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });

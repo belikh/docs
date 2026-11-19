@@ -20,7 +20,7 @@ for (const m of ds.matchAll(/(?:^|[\s`(-])(:{2,4})([a-z][a-z-]*)/gm)) if (!spec.
 for (const d of spec.DIRECTIVES) if (!ds.includes(d)) bad.push(`directive not documented in the skill: ${d}`);
 for (const sec of spec.STANDARD_SECTIONS) if (!ds.includes(`| \`${sec.id}\` | ${sec.title} |`)) bad.push(`standard section not documented in the skill: ${sec.id}`);
 for (const k of Object.keys(spec.FRONT_MATTER)) if (!ds.includes(`\`${k}\``)) bad.push(`front matter key not documented in the skill: ${k}`);
-for (const k of ["project", "version", "versionFrom", "repo", "siteUrl", "base", "sections", "glossary", "hero", "sources", "discover", "description", "icon"]) if (!ds.includes(k)) bad.push(`config key not documented in the skill: ${k}`);
+for (const k of ["project", "version", "versionFrom", "repo", "siteUrl", "base", "sections", "glossary", "hero", "diagrams", "sources", "discover", "description", "icon"]) if (!ds.includes(k)) bad.push(`config key not documented in the skill: ${k}`);
 // The github-readme skill (skill-readme/SKILL.md) names templates and graphics of the design system: check them against the
 // release in vendor/design, so a renamed template or graphic is caught here.
 const rs = readFileSync(join(root, "skill-readme/SKILL.md"), "utf8"); const gh = join(root, "vendor/design/node_modules/@belikh/jupiter-github");

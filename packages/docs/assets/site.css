@@ -100,6 +100,10 @@ body { font-size: var(--jp-fs-md); min-height: 100dvh; display: flex; flex-direc
 .dx-graphic--spot { width: min(14rem, 100%); margin-inline: auto; color: var(--jp-accent); }
 .dx-graphic--scene { width: 100%; color: var(--jp-accent); }
 .dx-graphic--icon { width: 2rem; }
+/* a diagram a project drew itself: line art that takes the text colour, in the column, never wider than it was drawn */
+.dx-diagram { margin: var(--jp-space-5) 0; color: var(--jp-text); overflow-x: auto; }
+.dx-diagram svg { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+.dx-diagram text { font-family: var(--jp-font-mono); }
 
 /* ---------- prev / next, footer ---------- */
 .dx-pager { display: grid; grid-template-columns: 1fr 1fr; gap: var(--jp-space-4); max-width: var(--jp-measure); margin-block-start: var(--jp-space-8); }

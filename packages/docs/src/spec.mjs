@@ -11,7 +11,7 @@ export const CALLOUTS = {
 
 /** Block directives: `:::name arg` ... `:::` (container) and `::name arg` (leaf, one line). */
 export const CONTAINERS = [...Object.keys(CALLOUTS), "see-also"];
-export const LEAVES = ["graphic", "glossary"];
+export const LEAVES = ["graphic", "diagram", "glossary"];
 export const DIRECTIVES = [...CONTAINERS, ...LEAVES];
 
 /** Inline syntax: `[[page-id]]`, `[[page-id#heading|text]]`, `[[term:Name]]`. */
@@ -61,6 +61,7 @@ export const CONFIG_KEYS = {
   sections: "list of { id, title, summary?, icon? }, in navigation order. Optional: a folder of pages is a section without being listed",
   glossary: "object: term to definition",
   hero: "string: spot graphic for the landing page, for example spot/summit",
+  diagrams: "list of folders below the source folder that hold the SVG files of ::diagram (default [\"diagrams\"]). ::diagram wiring looks for wiring.svg in each folder, in order",
   graphicsUrl: "string: URL template for graphics in generated Markdown: {root} {tier} {name} {theme}",
   latexDir: "string: a directory holding jupiter-docs.cls (monorepo packages/latex, or an unpacked jupiter-latex.tgz)",
   author: "string: author line on the PDF cover",

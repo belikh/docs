@@ -13,6 +13,8 @@ import { basename, join, posix, relative, resolve, sep } from "node:path";
 import YAML from "yaml";
 import { designRelease } from "./resolve.mjs";
 import { splitFrontMatter } from "./source.mjs";
+import { isFolder } from "./config.mjs";
+import { MAX_DIAGRAM_BYTES } from "./diagram.mjs";
 
 const UA = { "user-agent": "jupiter-docs-import" };
 const slugId = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -84,6 +86,7 @@ export function convertBody(text, { repo, ref, path, idByPath, local }) {
 }
 
 const walk = (dir) => readdirSync(dir).sort().flatMap((n) => { const p = join(dir, n); const st = lstatSync(p); return st.isSymbolicLink() ? [] : st.isDirectory() ? walk(p) : p.endsWith(".md") ? [p] : []; });
+const walkSvg = (dir) => readdirSync(dir).sort().flatMap((n) => { const p = join(dir, n); const st = lstatSync(p); return st.isSymbolicLink() ? [] : st.isDirectory() ? walkSvg(p) : p.endsWith(".svg") ? [p] : []; });
 const sourceOf = (repo, ref, path) => ({ repo: repo ?? "", ref, path, url: repo ? `https://github.com/${repo}/blob/${ref}/${path}` : "" });
 const page = (meta, body) => `---\n${YAML.stringify(meta)}---\n\n${body}`;
 
@@ -104,10 +107,17 @@ export function readProject(dir, src, ref) {
     // a page whose header cannot be read is written as it is, so `check` reports the problem with the file name
     pages.set(rel, error ? text : page({ ...meta, source: sourceOf(src.repo, ref, path) }, convertBody(body, { repo: src.repo, ref, path, idByPath, local: dir })));
   }
+  // the diagram folders of the project (SVG files for ::diagram), copied next to its pages. A file over the size limit is left
+  // out, so `check` reports the diagram as missing and says where it looked.
+  const dirs = Array.isArray(pc.diagrams) ? pc.diagrams.filter(isFolder) : ["diagrams"]; const assets = new Map();
+  for (const d of dirs) {
+    const base = join(abs, d); if (!existsSync(base) || !lstatSync(base).isDirectory()) continue;
+    for (const f of walkSvg(base)) { const text = readFileSync(f, "utf8"); if (Buffer.byteLength(text) <= MAX_DIAGRAM_BYTES) assets.set(posix.join(d.split(sep).join("/"), relative(base, f).split(sep).join("/")), text); }
+  }
   let version = typeof pc.version === "string" ? pc.version : "";
   if (!version && pc.versionFrom && existsSync(join(dir, pc.versionFrom))) { try { version = String(JSON.parse(readFileSync(join(dir, pc.versionFrom), "utf8")).version ?? ""); } catch { /* not JSON: no version */ } }
-  const project = { id: pc.id, title: src.title ?? pc.project, summary: src.summary ?? pc.description ?? lead, icon: src.icon ?? pc.icon, version, sections: src.sections ?? pc.sections ?? [], glossary: pc.glossary ?? {} };
-  return { project, pages };
+  const project = { id: pc.id, title: src.title ?? pc.project, summary: src.summary ?? pc.description ?? lead, icon: src.icon ?? pc.icon, version, sections: src.sections ?? pc.sections ?? [], glossary: pc.glossary ?? {}, diagrams: dirs };
+  return { project, pages, assets };
 }
 
 /** Download owner/name at a ref and unpack it into a temporary folder (one request, no API rate limit). */
@@ -139,7 +149,7 @@ export async function runImport(config, root, log = console.log) {
       // is read at the release the design files were downloaded from, so the site is consistent.
       const fixed = process.env.JUPITER_IMPORT_REF || (src.ref && src.ref !== "latest" ? src.ref : rel?.repo === src.repo && rel.tag ? rel.tag : null);
       let ref = src.path ? "local" : fixed ?? (await latestTag(src.repo)) ?? "HEAD";
-      let project; let pages;
+      let project; let pages; let assets = new Map();
       if (src.files) {
         const idByPath = Object.fromEntries(Object.entries(src.files).map(([p, m]) => [p, m.id])); pages = new Map();
         for (const [path, m] of Object.entries(src.files)) {
@@ -153,7 +163,7 @@ export async function runImport(config, root, log = console.log) {
           let dir = src.path ? resolve(root, src.path) : await checkout(src.repo, ref, temp);
           // the newest release can be older than the project's documentation: read the default branch then
           if (!src.path && !fixed && ref !== "HEAD" && !existsSync(join(dir, "docs.config.json"))) { ref = "HEAD"; dir = await checkout(src.repo, ref, temp); }
-          ({ project, pages } = readProject(dir, src, ref));
+          ({ project, pages, assets } = readProject(dir, src, ref));
         } catch (e) {
           if (!src.discovered || e.cause || /HTTP|fetch|tar failed|timeout/i.test(e.message)) throw new Error(`${name}@${ref}: ${e.message}`);
           log(`warning: ${name}@${ref} is left out: ${e.message}`); continue;
@@ -164,9 +174,9 @@ export async function runImport(config, root, log = console.log) {
       if (projects.some((p) => p.id === id)) throw new Error(`${name}: the project id "${id}" is used twice; set "id" on one entry of sources`);
       if (!project.version && /^v?\d+\.\d+/.test(ref)) project.version = ref.replace(/^v/, "");
       if (!pages.has("index.md")) pages.set("index.md", page({ title: project.title, summary: project.summary || `Documentation of ${project.title}.` }, ""));
-      for (const [file, text] of pages) { const f = join(out, id, file); mkdirSync(join(f, ".."), { recursive: true }); writeFileSync(f, text); }
+      for (const [file, text] of [...pages, ...assets]) { const f = join(out, id, file); mkdirSync(join(f, ".."), { recursive: true }); writeFileSync(f, text); }
       projects.push({ id, ...project, repo: src.repo ?? "", ref, url: src.repo ? `https://github.com/${src.repo}` : "" });
-      count += pages.size; log(`import: ${name}@${ref} -> ${config.src}/_imported/${id}/ (${pages.size} page(s))`);
+      count += pages.size; log(`import: ${name}@${ref} -> ${config.src}/_imported/${id}/ (${pages.size} page(s)${assets.size ? `, ${assets.size} diagram(s)` : ""})`);
     }
   } finally { for (const d of temp) rmSync(d, { recursive: true, force: true }); }
   writeFileSync(join(out, "projects.json"), JSON.stringify(projects, null, 2) + "\n");

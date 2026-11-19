@@ -9,9 +9,9 @@
 %%   \title \subtitle \author \jpversion \jpdate \jprepo  \maketitle \tableofcontents
 %%   \jpdocsection{title}{summary}  \jpintro{title}  \jppage{label}{title}{summary}  \subsection ... \paragraph
 %%   jpcallout[info|ok|warn|danger]{Title}  jpdocscode (+ \jpcodetitle)  jptable{aligns} (\jphead \jpth \jptablebody \jpfoot)
-%%   jpquote  \jpc{inline code}  \jpdel  \jpterm  \jpanchor{label}  \jpseealso  \jpgraphic{tier}{name}{alt}  \jpimage{path}{alt}
+%%   jpquote  \jpc{inline code}  \jpdel  \jpterm  \jpanchor{label}  \jpseealso  \jpgraphic{tier}{name}{alt}  \jpdiagram{slug}{alt}  \jpimage{path}{alt}
 %%   jpglossary + \jpgloss{term}{definition}  \jpdivider
-%% Optional files on TEXINPUTS (the build writes them): jpg-<tier>-<name>.pdf for ::graphic directives.
+%% Optional files on TEXINPUTS (the build writes them): jpg-<tier>-<name>.pdf for ::graphic directives, jpd-<slug>.pdf for ::diagram.
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesClass{jupiter-docs}[2026/11/13 Jupiter generated documentation]
 \DeclareOption*{\PassOptionsToClass{\CurrentOption}{article}}
@@ -72,6 +72,10 @@
     \noindent\includegraphics[width=\jp@gw]{jpg-#1-#2.pdf}%
   }{\ifstrequal{#1}{rule}{{\color{jpBorder}\hrule height 0.6pt}}{}}%
   \par\vspace{4pt}}
+%% A diagram is line art the project drew itself. It keeps its size on a wide page and shrinks to the text width on a narrow one.
+\newcommand{\jpdiagram}[2]{\par\vspace{6pt}\noindent%
+  \IfFileExists{jpd-#1.pdf}{\begin{center}\includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{jpd-#1.pdf}\end{center}}{\jpmuted{[diagram: #2]}}%
+  \par\vspace{6pt}}
 \newcommand{\jpimage}[2]{\par\noindent\IfFileExists{#1}{\includegraphics[width=\linewidth,keepaspectratio]{#1}}{\jpmuted{[image: #2]}}\par}
 
 %% ---------- cover ----------

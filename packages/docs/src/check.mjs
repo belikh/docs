@@ -1,9 +1,10 @@
 // `jupiter-docs check`: validates the source and reports file:line problems.
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { AUDIENCES, FRONT_MATTER, STATUSES } from "./spec.mjs";
 import { visit, plain } from "./parse.mjs";
-import { findTerm } from "./source.mjs";
+import { findDiagram, findTerm } from "./source.mjs";
+import { DIAGRAM_NAME, lintDiagram, readDiagram } from "./diagram.mjs";
 import { pageDir } from "./write-html.mjs";
 import { checkVoice, proseOf } from "./voice.mjs";
 import { graphicsSet } from "./resolve.mjs";
@@ -57,6 +58,17 @@ export function checkProject({ config, root, pages, projects }) {
         case "graphic": {
           if (!/^[a-z]+\/[a-z0-9-]+$/.test(n.ref)) err(p, n.line, `::graphic needs tier/name (for example rule/end), got "${n.ref}"`);
           else if (g && !g.names.has(n.ref)) err(p, n.line, `unknown graphic "${n.ref}" (see the manifest of @belikh/jupiter-graphics)`);
+          break;
+        }
+        case "diagram": {
+          if (!DIAGRAM_NAME.test(n.name)) { err(p, n.line, `::diagram needs a name such as wiring or timing/line (lower case letters, digits and -), got "${n.name}"`); break; }
+          if (!n.alt) err(p, n.line, `::diagram ${n.name} needs alt text: a diagram is never decoration, so say what it shows`);
+          const d = findDiagram(p, n.name);
+          if (!d) { err(p, n.line, `diagram "${n.name}" not found: put ${n.name}.svg in ${(p.project.diagramDirs ?? []).map((x) => relative(root, x) || ".").join(" or ")}`); break; }
+          const r = lintDiagram(readDiagram(d.file));
+          // an imported project's drawing is its own repository's to fix: style breaks are warnings there, unsafe content is never allowed
+          for (const e of r.errors) (p.project.local || r.unsafe ? err : warn)(p, n.line, `diagram ${n.name}: ${e}`);
+          for (const w of r.warnings) warn(p, n.line, `diagram ${n.name}: ${w}`);
           break;
         }
         case "glossary": if (!Object.keys(p.project.glossary).length) err(p, n.line, "::glossary used but docs.config.json has no glossary"); break;

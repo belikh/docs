@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, mkdirSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, mkdirSync, renameSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,9 @@ import { texWriter, texEscape } from "../src/write-tex.mjs";
 import { convertBody, runImport } from "../src/import.mjs";
 import { loadConfig } from "../src/config.mjs";
 import { checkVoice, proseOfFile } from "../src/voice.mjs";
+import { bakeDiagram, inlineDiagram, lintDiagram, tokenColours } from "../src/diagram.mjs";
+import { buildPdf } from "../src/build-pdf.mjs";
+import { spawnSync } from "node:child_process";
 
 // the fixtures run in temporary folders, so point them at the design system release that npm run update:design downloaded
 process.env.JUPITER_DESIGN_DIR ??= join(dirname(fileURLToPath(import.meta.url)), "../../../vendor/design");
@@ -215,4 +218,123 @@ test("site: each page links to its own project's PDF and repository; the home pa
 test("site: without a PDF file there is no PDF link anywhere", async () => {
   const d = hubWithProject(); await importAll(d); await buildSite(load(d));
   assert.ok(!readFileSync(join(d, "dist/site/tool/index.html"), "utf8").includes("Download the PDF"));
+});
+
+// ---- diagrams: ::diagram, the drawing rules, and the three outputs
+const SVG = (extra = "", attrs = "") => `<svg viewBox="0 0 200 80" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"${attrs}>
+  <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M1 1 L7 4 L1 7"/></marker></defs>
+  <rect x="10" y="10" width="80" height="40"/>
+  <path d="M90 30 H150" stroke="var(--jp-accent)" marker-end="url(#a)"/>
+  <text x="20" y="35" font-size="13">GPIO 4</text>${extra}
+</svg>`;
+const withDiagram = (svg = SVG()) => {
+  const d = copy(); mkdirSync(join(d, "docs-src/diagrams/wiring"), { recursive: true });
+  writeFileSync(join(d, "docs-src/diagrams/wiring/board.svg"), svg);
+  writeFileSync(join(d, "docs-src/dia.md"), "---\ntitle: Dia\nsummary: A diagram.\nsection: a\n---\n\n## Wiring\n\n::diagram wiring/board The board connects to the monitor.\n");
+  return d;
+};
+const have = (cmd) => spawnSync("sh", ["-c", `command -v ${cmd}`]).status === 0;
+
+test("diagram: the directive parses a name and alt text", () => {
+  const t = parseBody("::diagram wiring/board The board connects to the monitor.\n\n::diagram timing\n");
+  assert.deepEqual([t[0].type, t[0].name, t[0].alt], ["diagram", "wiring/board", "The board connects to the monitor."]);
+  assert.deepEqual([t[1].name, t[1].alt], ["timing", ""]);
+});
+
+test("diagram: every drawing rule is checked and says what to do", () => {
+  assert.deepEqual(lintDiagram(SVG()).errors, []);
+  const bad = {
+    "a hex colour": [SVG().replace("var(--jp-accent)", "#ff0000"), /colours are tokens/],
+    "a fill": [SVG().replace('<svg viewBox="0 0 200 80" fill="none" ', '<svg viewBox="0 0 200 80" '), /filled: line art has no fills/],
+    "two stroke widths": [SVG('<path d="M0 0 H5" stroke-width="3"/>'), /stroke widths differ/],
+    "opacity": [SVG('<path d="M0 0 H5" opacity="0.5"/>'), /opacity/],
+    "a style attribute": [SVG('<path d="M0 0 H5" style="stroke:red"/>'), /style attribute/],
+    "a font family": [SVG().replace("font-size", 'font-family="Arial" font-size'), /JetBrains Mono/],
+    "a filter": [SVG('<path d="M0 0 H5" filter="url(#f)"/>'), /no filters/],
+    "no viewBox": [SVG().replace('viewBox="0 0 200 80" ', ""), /needs a viewBox/],
+    "an image": [SVG('<image href="x.png"/>'), /not allowed/],
+  };
+  for (const [what, [svg, re]] of Object.entries(bad)) assert.ok(lintDiagram(svg).errors.some((e) => re.test(e)), `${what}: ${JSON.stringify(lintDiagram(svg).errors)}`);
+  for (const [what, svg] of Object.entries({ "a script": SVG("<script>alert(1)</script>"), "an event handler": SVG('<path d="M0 0" onload="x()"/>'), "an external reference": SVG('<use href="http://x.test/a.svg#b"/>'), "an outside url": SVG('<path d="M0 0" stroke="url(http://x.test/a)"/>') }))
+    assert.ok(lintDiagram(svg).unsafe, `${what} must be unsafe`);
+  assert.equal(inlineDiagram(SVG("<script>alert(1)</script>"), "x"), "", "an unsafe diagram is never inlined");
+  assert.throws(() => bakeDiagram(SVG("<script>alert(1)</script>"), "light", tokenColours(process.env.JUPITER_DESIGN_DIR + "/.."), "x.svg"), /not safe/);
+});
+
+test("diagram: check reports a missing file, missing alt text and rule breaks; a good diagram passes", () => {
+  assert.deepEqual(load(withDiagram()).errors, []);
+  const none = load(withDiagram(SVG())); assert.ok(none.pages.some((p) => p.id === "dia"));
+  const d = withDiagram(); rmSync(join(d, "docs-src/diagrams/wiring/board.svg")); assert.ok(load(d).errors.some((e) => /diagram "wiring\/board" not found: put wiring\/board\.svg in docs-src\/diagrams/.test(e)));
+  const noAlt = withDiagram(); writeFileSync(join(noAlt, "docs-src/dia.md"), readFileSync(join(noAlt, "docs-src/dia.md"), "utf8").replace(" The board connects to the monitor.", "")); assert.ok(load(noAlt).errors.some((e) => /needs alt text/.test(e)));
+  assert.ok(load(withDiagram(SVG().replace("var(--jp-accent)", "red"))).errors.some((e) => /colours are tokens/.test(e)));
+  const cfg = copy(); writeFileSync(join(cfg, "docs.config.json"), JSON.stringify({ project: "F", diagrams: ["../outside"] })); assert.ok(loadConfig(join(cfg, "docs.config.json")).errors.some((e) => /"diagrams" must be a list of folders/.test(e)));
+});
+
+test("diagram: another folder named in the config is searched", () => {
+  const d = withDiagram(); renameSync(join(d, "docs-src/diagrams"), join(d, "docs-src/figures"));
+  assert.ok(load(d).errors.length > 0);
+  const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8")); cfg.diagrams = ["figures"]; writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg));
+  assert.deepEqual(load(d).errors, []);
+});
+
+test("diagram: Markdown gets a picture and baked light and dark files, and stale ones are found", () => {
+  const d = withDiagram(); const p = load(d); const out = renderMarkdown(p);
+  const md = out.get("docs/dia.md");
+  assert.ok(md.includes('<picture><source media="(prefers-color-scheme: dark)" srcset="diagrams/wiring/board-dark.svg"><img alt="The board connects to the monitor." src="diagrams/wiring/board-light.svg"></picture>'));
+  const c = tokenColours(d); const light = out.get("docs/diagrams/wiring/board-light.svg"); const dark = out.get("docs/diagrams/wiring/board-dark.svg");
+  assert.ok(light.includes(c.light.text) && light.includes(c.light.accent) && !light.includes("currentColor") && !light.includes("var(--jp-"));
+  assert.ok(dark.includes(c.dark.text) && dark.includes(c.dark.accent));
+  assert.ok(light.includes('width="200" height="80"') && light.includes("JetBrains Mono") && light.includes('<text stroke="none" fill="'), "size, font and an unoutlined fill on the text");
+  assert.ok(light.startsWith("<!-- Generated by jupiter-docs from docs-src/diagrams/wiring/board.svg."));
+  writeMarkdown(p); assert.deepEqual(diffMarkdown(load(d)), []);
+  writeFileSync(join(d, "docs/diagrams/wiring/board-dark.svg"), "<svg/>"); assert.ok(diffMarkdown(load(d)).some((m) => /board-dark\.svg: out of date/.test(m)));
+  mkdirSync(join(d, "docs/diagrams"), { recursive: true }); writeFileSync(join(d, "docs/diagrams/gone-light.svg"), "<!-- Generated by jupiter-docs from x. -->\n<svg/>"); assert.ok(diffMarkdown(load(d)).some((m) => /gone-light\.svg: generated diagram with no source/.test(m)));
+  const nested = withDiagram(); mkdirSync(join(nested, "docs-src/deep"), { recursive: true });
+  writeFileSync(join(nested, "docs-src/deep/page.md"), "---\ntitle: Deep\nsummary: Nested.\nsection: a\n---\n\n::diagram wiring/board Nested alt.\n");
+  assert.ok(renderMarkdown(load(nested)).get("docs/deep/page.md").includes('src="../diagrams/wiring/board-light.svg"'), "a page in a folder points up to the diagrams folder");
+});
+
+test("diagram: the site inlines the SVG, themed, with ids kept apart and text not outlined", async () => {
+  const d = withDiagram(); await buildSite(load(d)); const html = readFileSync(join(d, "dist/site/dia/index.html"), "utf8");
+  assert.ok(html.includes('<figure class="dx-diagram" role="img" aria-label="The board connects to the monitor.">'));
+  assert.ok(/<svg [^>]*width="200"[^>]*class="dx-diagram__svg" aria-hidden="true"/.test(html));
+  assert.ok(html.includes('stroke="var(--jp-accent)"') && html.includes('<text stroke="none" fill="currentColor"'));
+  assert.ok(/<marker id="dg[0-9a-f]{6}-a"/.test(html) && /marker-end="url\(#dg[0-9a-f]{6}-a\)"/.test(html), "ids are prefixed per diagram");
+  assert.ok(!html.includes("<script>alert"));
+});
+
+test("diagram: TeX asks for a file named after the diagram", () => {
+  const p = load(withDiagram()); const t = texWriter({ pages: p.pages, config: p.config }).document({ nav: p.nav, date: "1 Jan 2026", version: "v9" });
+  assert.ok(t.includes("\\jpdiagram{wiring-board}{The board connects to the monitor.}"));
+});
+
+test("diagram: a project's diagram folders are imported with its pages and appear on the site", async () => {
+  const d = hubWithProject(); const pr = join(d, "ext/tool"); mkdirSync(join(pr, "docs-src/diagrams/wiring"), { recursive: true });
+  writeFileSync(join(pr, "docs-src/diagrams/wiring/board.svg"), SVG());
+  writeFileSync(join(pr, "docs-src/extras/more.md"), "---\ntitle: More\nsummary: More.\n---\n\n## Part\n\n::diagram wiring/board The board connects to the monitor.\n");
+  await importAll(d);
+  assert.ok(existsSync(join(d, "docs-src/_imported/tool/diagrams/wiring/board.svg")));
+  assert.deepEqual(JSON.parse(readFileSync(join(d, "docs-src/_imported/projects.json"), "utf8"))[0].diagrams, ["diagrams"]);
+  const p = load(d); assert.deepEqual(p.errors, []); await buildSite(p);
+  assert.ok(readFileSync(join(d, "dist/site/tool/extras/more/index.html"), "utf8").includes('class="dx-diagram"'));
+  assert.ok(![...renderMarkdown(p).keys()].some((k) => k.includes("diagrams")), "an imported diagram is not written into the hub's docs/");
+  // an imported diagram that breaks a rule is a warning, one that is unsafe leaves the project out
+  writeFileSync(join(pr, "docs-src/diagrams/wiring/board.svg"), SVG().replace("var(--jp-accent)", "#fff")); await importAll(d);
+  const soft = load(d); assert.deepEqual(soft.errors, []); assert.ok(soft.warnings.some((w) => /colours are tokens/.test(w)));
+  writeFileSync(join(pr, "docs-src/diagrams/wiring/board.svg"), SVG("<script>x</script>")); await importAll(d);
+  const hard = load(d); assert.ok(hard.warnings.some((w) => /left out of the site/.test(w)));
+});
+
+test("diagram: the PDF draws the diagram in JetBrains Mono, and fails without rsvg-convert instead of dropping it", { skip: !(have("xelatex") && have("rsvg-convert") && have("pdffonts")) }, async () => {
+  const d = withDiagram(); const p = load(d); const r = await buildPdf(p);
+  assert.ok(existsSync(join(d, ".." , "..", r.pdf)) || existsSync(join(d, r.pdf)));
+  assert.ok(existsSync(join(d, "dist/.pdf-build/fixture/jpd-wiring-board.pdf")), "the diagram was converted");
+  const fonts = spawnSync("pdffonts", [join(d, r.pdf)], { encoding: "utf8" }).stdout;
+  assert.ok(/JetBrainsMono/.test(fonts), fonts);
+  assert.ok(!/DejaVu|Liberation|Arial|Helvetica|Times/i.test(fonts), "no font outside the design system");
+  if (have("pdftotext")) assert.ok(spawnSync("pdftotext", [join(d, r.pdf), "-"], { encoding: "utf8" }).stdout.includes("GPIO 4"), "the diagram text is in the PDF");
+  // only xelatex on the path: the build must stop and say what is missing
+  const bin = mkdtempSync(join(tmpdir(), "jpbin-")); symlinkSync(spawnSync("sh", ["-c", "command -v xelatex"], { encoding: "utf8" }).stdout.trim(), join(bin, "xelatex"));
+  const keep = process.env.PATH; process.env.PATH = bin;
+  try { await assert.rejects(() => buildPdf(load(withDiagram())), /rsvg-convert not found/); } finally { process.env.PATH = keep; }
 });

@@ -6,6 +6,8 @@ export const DEFAULT_GRAPHICS_URL = "https://raw.githubusercontent.com/belikh/de
 const DEFAULTS = { src: "docs-src", mdOut: "docs", siteOut: "dist/site", pdfOut: "dist", base: "/", repoBranch: "main", sections: [], glossary: {}, graphicsUrl: DEFAULT_GRAPHICS_URL };
 
 const REPO = /^[\w.-]+\/[\w.-]+$/;
+/** A folder name below the source folder: no absolute path, no "..". */
+export const isFolder = (d) => typeof d === "string" && d.trim() !== "" && !d.startsWith("/") && !/(^|[\\/])\.\.([\\/]|$)/.test(d);
 const SOURCE_KEYS = ["repo", "path", "ref", "id", "title", "summary", "icon", "sections", "files"];
 
 /** Load docs.config.json. Returns { config, root, errors }. */
@@ -36,6 +38,7 @@ export function loadConfig(file) {
       }
     });
   }
+  if (c.diagrams !== undefined && (!Array.isArray(c.diagrams) || c.diagrams.some((d) => !isFolder(d)))) errors.push(`${file}: "diagrams" must be a list of folders below the source folder, such as ["diagrams"] (no .. and no absolute paths)`);
   if (c.redirects !== undefined && (!c.redirects || typeof c.redirects !== "object" || Array.isArray(c.redirects) || Object.values(c.redirects).some((v) => typeof v !== "string"))) errors.push(`${file}: "redirects" must be an object of old address to page id`);
   if (c.discover !== undefined) {
     const d = c.discover;

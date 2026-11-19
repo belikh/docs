@@ -1,6 +1,7 @@
 // AST -> LaTeX for jupiter-docs.cls. The writer emits only semantic macros and environments; every length, colour, font and
 // table column rule lives in the class (latex/jupiter-docs.cls).
 import { dirname, resolve } from "node:path";
+import { diagramSlug } from "./diagram.mjs";
 import { CALLOUTS } from "./spec.mjs";
 
 export function texEscape(s) {
@@ -60,6 +61,7 @@ export function texWriter({ pages, config, only = null }) {
       case "callout": { const c = CALLOUTS[n.kind]; return `\\begin{jpcallout}[${c.tex}]{${texEscape(n.title || c.label)}}\n${blk(n.children, page)}\n\\end{jpcallout}`; }
       case "seealso": return `\\jpseealso{}\n${blk(n.children, page)}`;
       case "graphic": { const [tier, name] = n.ref.split("/"); return `\\jpgraphic{${tier}}{${name}}{${texEscape(n.alt)}}`; }
+      case "diagram": return `\\jpdiagram{${diagramSlug(n.name)}}{${texEscape(n.alt)}}`;
       case "glossary": return `\\begin{jpglossary}\n${Object.entries(page.project.glossary).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `\\jpgloss{${texEscape(k)}}{${texEscape(v)}}`).join("\n")}\n\\end{jpglossary}`;
       default: return "";
     }
