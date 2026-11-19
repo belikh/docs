@@ -255,7 +255,10 @@ test("diagram: every drawing rule is checked and says what to do", () => {
     "an image": [SVG('<image href="x.png"/>'), /not allowed/],
   };
   for (const [what, [svg, re]] of Object.entries(bad)) assert.ok(lintDiagram(svg).errors.some((e) => re.test(e)), `${what}: ${JSON.stringify(lintDiagram(svg).errors)}`);
-  for (const [what, svg] of Object.entries({ "a script": SVG("<script>alert(1)</script>"), "an event handler": SVG('<path d="M0 0" onload="x()"/>'), "an external reference": SVG('<use href="http://x.test/a.svg#b"/>'), "an outside url": SVG('<path d="M0 0" stroke="url(http://x.test/a)"/>') }))
+  for (const [what, svg] of Object.entries({ "a script": SVG("<script>alert(1)</script>"), "an event handler": SVG('<path d="M0 0" onload="x()"/>'), "an external reference": SVG('<use href="http://x.test/a.svg#b"/>'), "an outside url": SVG('<path d="M0 0" stroke="url(http://x.test/a)"/>'),
+    // a browser lowercases names in inline SVG, so case and unlisted elements must not slip past the rules
+    "a script in capitals": SVG("<Script>alert(1)</Script>"), "a lowercase foreignobject": SVG("<foreignobject><div>x</div></foreignobject>"),
+    "an href in capitals": SVG('<path d="M0 0" HREF="#a"/>'), "a style attribute": SVG('<path d="M0 0" style="stroke:\\75 rl(http://x.test/t)"/>') }))
     assert.ok(lintDiagram(svg).unsafe, `${what} must be unsafe`);
   assert.equal(inlineDiagram(SVG("<script>alert(1)</script>"), "x"), "", "an unsafe diagram is never inlined");
   assert.throws(() => bakeDiagram(SVG("<script>alert(1)</script>"), "light", tokenColours(process.env.JUPITER_DESIGN_DIR + "/.."), "x.svg"), /not safe/);

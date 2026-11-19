@@ -205,6 +205,8 @@ The diagram follows the design system's rules for line art, and `jupiter-docs ch
 | Text | Do not set `font-family`. Diagram text is JetBrains Mono. A size of 13 or 14 units is readable in the PDF. |
 | Nothing else | No gradients, filters, shadows, images, scripts, `style` attributes or links to other files. |
 
+An element outside the list, a `style` attribute, an event handler or a link is never published. In a project that docs.jupiter.au imports, other rule breaks are warnings, but one of these leaves the project off the site until it is fixed.
+
 Text is filled and has no outline, whatever the `<svg>` sets. A marker does not inherit the colour of the line that uses it, so set `stroke` on the marker's own path.
 
 On the site the SVG is inlined, so it follows the light and dark theme. For the Markdown output `jupiter-docs build` writes `docs/diagrams/<name>-light.svg` and `-dark.svg` and draws them with a `<picture>`, so commit them with the pages. The PDF build converts the light file with `rsvg-convert` and fails when that tool is missing, so a PDF never loses a diagram. A project's diagram folders are imported with its pages, so its diagrams appear on docs.jupiter.au.
