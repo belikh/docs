@@ -2,13 +2,12 @@
 // come from the LaTeX bundle. The hub's PDF holds the hub's pages; an imported project's PDF holds that project's pages.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { texWriter } from "./write-tex.mjs";
 import { visit } from "./parse.mjs";
 import { designDir, graphicSvg, packageRoot, resolveFile } from "./resolve.mjs";
 import { bakeDiagram, diagramSlug, readDiagram, tokenColours } from "./diagram.mjs";
 import { findDiagram } from "./source.mjs";
-import { relative, sep } from "node:path";
 
 /** Find the LaTeX files: the jupiter-docs.cls of this project (latex/ next to the config, or the one shipped in this package), and the design
  *  system's jupiter-latex bundle (jupiter.sty, jupiter-tokens.sty, fonts, graphics) from config.latexDir, $JUPITER_LATEX_DIR or vendor/design/latex.

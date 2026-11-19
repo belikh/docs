@@ -66,14 +66,15 @@ export function lintDiagram(source) {
   for (const t of tags) {
     if (t.closing) { stack.pop(); continue; }
     const { name, attrs } = t;
-    if (!ELEMENTS.has(name)) {
-      errors.push(`<${name}> is not allowed (allowed: ${[...ELEMENTS].join(", ")})`);
-      if (/^(script|foreignObject|image|use|a|iframe|animate|animateTransform|set|style)/.test(name)) unsafe = true;
-    }
-    for (const [k, v] of Object.entries(attrs)) {
-      if (/^on/i.test(k)) { errors.push(`<${name}> has the event handler ${k}`); unsafe = true; }
-      else if (k === "href" || k === "xlink:href") { errors.push(`<${name}> has a ${k}: diagrams cannot reference other files or elements`); unsafe = true; }
-      else if (k === "style") errors.push(`<${name}> has a style attribute: use presentation attributes (stroke, fill) with tokens`);
+    // the element list is an allowlist: a browser lowercases tag and attribute names in inline SVG, so <Script> or
+    // <foreignobject> would run as the real thing. Anything outside the list is unsafe, not only a style break.
+    if (!ELEMENTS.has(name)) { errors.push(`<${name}> is not allowed (allowed: ${[...ELEMENTS].join(", ")})`); unsafe = true; }
+    for (const [key, v] of Object.entries(attrs)) {
+      const k = key.toLowerCase();
+      if (/^on/.test(k)) { errors.push(`<${name}> has the event handler ${key}`); unsafe = true; }
+      else if (k === "href" || k === "xlink:href") { errors.push(`<${name}> has a ${key}: diagrams cannot reference other files or elements`); unsafe = true; }
+      // CSS can load files through escapes that no pattern catches (\75 rl(...)), so a style attribute is never published
+      else if (k === "style") { errors.push(`<${name}> has a style attribute: use presentation attributes (stroke, fill) with tokens`); unsafe = true; }
       else if (["filter", "mask", "clip-path"].includes(k)) errors.push(`<${name}> has ${k}: no filters, masks or shadows`);
       else if (/opacity$/.test(k)) errors.push(`<${name}> has ${k}: do not lower contrast with opacity; use var(--jp-text-muted) for a quieter line`);
       else if (["fill", "stroke", "color"].includes(k)) { if (!OK_COLOUR.test(v.trim())) errors.push(`<${name}> ${k}="${v}": colours are tokens. Use currentColor, none or var(--jp-NAME), where NAME is ${DIAGRAM_TOKENS.join(", ")}`); }
