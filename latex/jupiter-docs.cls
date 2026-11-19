@@ -56,6 +56,16 @@
 \newunicodechar{≥}{{\jpmono\addfontfeatures{RawFeature=+calt}>=}}
 \newunicodechar{≤}{{\jpmono\addfontfeatures{RawFeature=+calt}<=}}
 \newunicodechar{≠}{{\jpmono\addfontfeatures{RawFeature=+calt}!=}}
+%% Ω (ohm) is in none of the brand fonts, and no other font is allowed, so it is drawn: line art at the cap height of the current
+%% font, in the current colour. ActualText keeps it Ω when the PDF is searched or copied; a bookmark gets the character itself.
+\IfFileExists{accsupp.sty}{\RequirePackage{accsupp}}{}
+\newdimen\jp@ohmh
+\newcommand{\jp@ohmshape}{\begingroup\jp@ohmh=\fontcharht\font`\H\relax%
+  \hspace{0.04em}\tikz[baseline=0pt,x=\jp@ohmh,y=\jp@ohmh,line width=0.085\jp@ohmh,line cap=butt,line join=miter]
+    \draw (0,0.05) -- (0.27,0.05) -- (0.154,0.235) arc[start angle=232,end angle=-52,radius=0.4] -- (0.53,0.05) -- (0.8,0.05);%
+  \hspace{0.04em}\endgroup}
+\newcommand{\jp@ohm}{\ifdefined\BeginAccSupp\BeginAccSupp{method=hex,unicode,ActualText=03A9}\jp@ohmshape\EndAccSupp{}\else\jp@ohmshape\fi}
+\newunicodechar{Ω}{\texorpdfstring{\jp@ohm}{Ω}}
 
 %% ---------- metadata ----------
 \newcommand{\subtitle}[1]{\gdef\jp@subtitle{#1}}

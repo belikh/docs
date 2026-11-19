@@ -341,3 +341,10 @@ test("diagram: the PDF draws the diagram in JetBrains Mono, and fails without rs
   const keep = process.env.PATH; process.env.PATH = bin;
   try { await assert.rejects(() => buildPdf(load(withDiagram())), /rsvg-convert not found/); } finally { process.env.PATH = keep; }
 });
+
+test("pdf: Ω is drawn, since no brand font has it, and the PDF still embeds only the brand fonts", { skip: !(have("xelatex") && have("pdffonts")) }, async () => {
+  const d = copy(); writeFileSync(join(d, "docs-src/ohm.md"), "---\ntitle: Ohm\nsummary: A resistor.\nsection: a\n---\n\n## 47 Ω\n\nA 47 Ω resistor, and 994 mΩ in a table:\n\n| Rail | Impedance |\n| --- | --- |\n| Core | 994 mΩ |\n");
+  const r = await buildPdf(load(d));
+  const fonts = spawnSync("pdffonts", [join(d, r.pdf)], { encoding: "utf8" }).stdout;
+  assert.ok(!/DejaVu|Liberation|Arial|Helvetica|Times|Latin Modern|LMRoman/i.test(fonts), fonts);
+});
