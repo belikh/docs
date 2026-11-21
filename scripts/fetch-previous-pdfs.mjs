@@ -4,11 +4,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { documentErrors, pdfFile } from "../packages/docs/src/config.mjs";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const config = JSON.parse(readFileSync(join(root, "docs.config.json"), "utf8"));
 const projects = existsSync(join(root, "docs-src/_imported/projects.json")) ? JSON.parse(readFileSync(join(root, "docs-src/_imported/projects.json"), "utf8")) : [];
 const site = config.siteUrl.replace(/\/$/, "");
-const wanted = [{ dir: "", file: config.pdf ?? `${config.id}.pdf` }, ...projects.map((p) => ({ dir: `${p.id}/`, file: `${p.id}.pdf` }))];
+// a project that lists documents has one PDF per document, named as source.mjs names them
+const files = (id, documents, single) => (documents !== undefined && !documentErrors(documents, "").length ? documents.map((d) => pdfFile(id, d.id)) : [single]);
+const wanted = [...files(config.id, config.documents, config.pdf ?? pdfFile(config.id)).map((file) => ({ dir: "", file })), ...projects.flatMap((p) => files(p.id, p.documents, pdfFile(p.id)).map((file) => ({ dir: `${p.id}/`, file })))];
 for (const { dir, file } of wanted) {
   const local = join(root, "dist", file);
   if (existsSync(local)) continue;

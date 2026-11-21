@@ -5,7 +5,6 @@ import { dirname, join, extname } from "node:path";
 import { htmlWriter, esc, makeUrl, pageHref, pageDir } from "./write-html.mjs";
 import { plain, visit } from "./parse.mjs";
 import { designRelease, graphicSvg, logos, packageRoot, pkgDir, readCss } from "./resolve.mjs";
-import { pdfFileName } from "./build-pdf.mjs";
 
 const hash = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 10);
 const THEME_SCRIPT = `(function(){try{var q=new URLSearchParams(location.search).get("theme");var m=q||localStorage.getItem("jp-theme");if(m==="light"||m==="dark")document.documentElement.setAttribute("data-theme",m);if(localStorage.getItem("jp-density")==="compact")document.documentElement.setAttribute("data-density","compact")}catch(e){}})();`;
@@ -53,10 +52,13 @@ export async function buildSite(project) {
   const index = pages.map((p) => ({ u: dirOf(p), t: p.meta.title, s: p.meta.summary, sec: [p.project.local ? "" : p.project.title, p === p.project.index ? "" : sectionOf(p)?.title].filter(Boolean).join(" / "), h: p.headings.filter((h) => h.depth > 1).map((h) => h.text), x: textOf(p) }));
   hashed(out, assets, "search.json", JSON.stringify(index));
 
-  // PDFs: a project links to its own PDF when the PDF exists in pdfOut (built by jupiter-docs build --pdf before the site)
-  const pdfRel = (pr) => (pr.local ? pdfFileName(config, pr) : `${pr.id}/${pdfFileName(config, pr)}`);
-  const pdfs = new Set(projects.filter((pr) => pr.nav.length && existsSync(join(root, config.pdfOut, pdfFileName(config, pr)))));
-  for (const pr of pdfs) emit(out, pdfRel(pr), readFileSync(join(root, config.pdfOut, pdfFileName(config, pr))));
+  // PDFs: a project links to its own PDFs (one, or one per document) when they exist in pdfOut (built by jupiter-docs build --pdf
+  // before the site). pdfs: project -> its documents that have a file.
+  const pdfRel = (pr, doc) => (pr.local ? doc.file : `${pr.id}/${doc.file}`);
+  const pdfs = new Map(projects.map((pr) => [pr, pr.documents.filter((doc) => doc.nav.length && existsSync(join(root, config.pdfOut, doc.file)))]));
+  for (const [pr, docs] of pdfs) for (const doc of docs) emit(out, pdfRel(pr, doc), readFileSync(join(root, config.pdfOut, doc.file)));
+  // the PDF a page is in: the document that holds its section; a landing page is in every document, so it has a link only when there is one
+  const pdfOf = (page) => { const docs = pdfs.get(page.project) ?? []; return docs.find((d) => d.nav.some((s) => s.pages.includes(page))) ?? (page === page.project.index && page.project.documents.length === 1 ? docs[0] : null); };
   const w = htmlWriter({ pages, config, root }); const version = config.version ? `v${config.version}` : "";
   const design = designRelease(root);
   const spot = (ref, cls = "") => { const s = graphicSvg(ref, root); return s ? `<span class="${cls}">${s}</span>` : ""; };
@@ -64,8 +66,8 @@ export async function buildSite(project) {
   function layout({ page, title, desc, main, toc = [], wide = false, url, rootRel }) {
     const a = (k) => url(assets[k]); const home = url("");
     // the top bar names the project of the page: its PDF (not on the home page) and its repository
-    const here = page?.project ?? hub; const repo = here.local ? config.repo : here.url; const pdfHere = page && page.id !== "index" && pdfs.has(here) ? url(pdfRel(here)) : "";
-    const topLinks = `${pdfHere ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(pdfHere)}">PDF</a>` : ""}${repo ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(repo)}" rel="noopener">Source</a>` : ""}`;
+    const here = page?.project ?? hub; const repo = here.local ? config.repo : here.url; const docHere = page && page.id !== "index" ? pdfOf(page) : null;
+    const topLinks = `${docHere ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(url(pdfRel(here, docHere)))}"${docHere.id ? ` title="${esc(docHere.title)}"` : ""}>PDF</a>` : ""}${repo ? `<a class="jp-btn jp-btn--ghost jp-btn--sm" href="${esc(repo)}" rel="noopener">Source</a>` : ""}`;
     // the navigation of the page's project, then the list of projects
     const pr = page?.project ?? hub; const cur = (on, v = "page") => (on ? ` aria-current="${v}"` : "");
     const navHtml = [
@@ -141,7 +143,7 @@ ${page.tree.length ? `<div class="dx-landing-body">${body(page, url)}</div>` : "
       // the landing page of a project: what it is, where it comes from, its sections
       const meta = [release(pr) && `<span class="jp-badge jp-badge--info">${esc(release(pr))}</span>`, pr.url && `<a href="${esc(pr.url)}" rel="noopener">${esc(pr.repo)}</a>`].filter(Boolean).join("");
       main = `<nav class="dx-crumbs" aria-label="Breadcrumb"><ol><li><a href="${url("")}">Docs</a></li><li aria-current="page">${esc(pr.title)}</li></ol></nav>
-<header class="dx-head"><h1 class="dx-title">${esc(pr.title)}</h1><p class="dx-lead">${esc(pr.summary || page.meta.summary)}</p>${meta ? `<div class="dx-meta">${meta}</div>` : ""}${pdfs.has(pr) ? `<div class="dx-hero__act"><a class="jp-btn jp-btn--secondary" href="${url(pdfRel(pr))}">Download the PDF</a></div>` : ""}<div class="dx-graphic dx-graphic--rule" aria-hidden="true">${graphicSvg("rule/underline", root) ?? ""}</div></header>
+<header class="dx-head"><h1 class="dx-title">${esc(pr.title)}</h1><p class="dx-lead">${esc(pr.summary || page.meta.summary)}</p>${meta ? `<div class="dx-meta">${meta}</div>` : ""}${pdfs.get(pr).length ? `<div class="dx-hero__act">${pdfs.get(pr).map((doc) => `<a class="jp-btn jp-btn--secondary" href="${esc(url(pdfRel(pr, doc)))}"${doc.summary ? ` title="${esc(doc.summary)}"` : ""}>${doc.id ? `${esc(doc.title)} (PDF)` : "Download the PDF"}</a>`).join("")}</div>` : ""}<div class="dx-graphic dx-graphic--rule" aria-hidden="true">${graphicSvg("rule/underline", root) ?? ""}</div></header>
 <div class="dx-cards">${sectionCards(pr, url)}</div>
 ${page.tree.length ? `<div class="dx-landing-body">${body(page, url)}</div>` : ""}`;
       write(`${pageDir(page.id)}/index.html`, layout({ page, title: titleOf(page), desc: pr.summary || page.meta.summary, main, url }));

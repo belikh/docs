@@ -4,7 +4,7 @@ import { diffMarkdown, writeMarkdown } from "./build-md.mjs";
 const HELP = `jupiter-docs: one Markdown source, three outputs (site, repo Markdown, PDF)
 
   jupiter-docs check [--strict]            validate the source (exit 1 on errors; --strict also on warnings)
-  jupiter-docs build [--md] [--site] [--pdf]   build outputs (default: --md --site); --pdf writes one PDF per project
+  jupiter-docs build [--md] [--site] [--pdf]   build outputs (default: --md --site); --pdf writes one PDF per project, or one per document
   jupiter-docs build --check               fail when the generated Markdown is out of date
   jupiter-docs import                      fetch the projects named by sources and discover in the config (docs-src/_imported)
   jupiter-docs voice <file>...             check the wording of a README, a skill or any Markdown or .rst file (--strict: warnings fail too)

@@ -348,3 +348,55 @@ test("pdf: Ω is drawn, since no brand font has it, and the PDF still embeds onl
   const fonts = spawnSync("pdffonts", [join(d, r.pdf)], { encoding: "utf8" }).stdout;
   assert.ok(!/DejaVu|Liberation|Arial|Helvetica|Times|Latin Modern|LMRoman/i.test(fonts), fonts);
 });
+
+// documents: a project splits its PDF into several, each a group of its sections
+function hubWithDocuments(documents) {
+  const d = hubWithProject(); const f = join(d, "ext/tool/docs.config.json");
+  writeFileSync(f, JSON.stringify({ ...JSON.parse(readFileSync(f, "utf8")), documents }));
+  return d;
+}
+const TWO = [{ id: "user", title: "User guide", summary: "For people who run the tool.", sections: ["guides"] }, { id: "dev", title: "Developer reference", sections: ["extras"] }];
+test("documents: without the key a project has one PDF named after it", async () => {
+  const d = hubWithProject(); await importAll(d); const p = load(d);
+  assert.deepEqual(p.projects.map((pr) => pr.documents.map((x) => [x.id, x.file, x.nav.length])), [[["", "fixture.pdf", 1]], [["", "tool.pdf", 2]]]);
+});
+test("documents: the list survives the import, names one PDF per document, and a link to another document is plain text", async () => {
+  const d = hubWithDocuments(TWO); await importAll(d); const p = load(d); assert.deepEqual(p.errors, []); assert.deepEqual(p.warnings, []);
+  const tool = p.projects[1];
+  assert.deepEqual(tool.documents.map((x) => [x.id, x.title, x.file, x.nav.map((s) => s.id)]), [["user", "User guide", "tool-user.pdf", ["guides"]], ["dev", "Developer reference", "tool-dev.pdf", ["extras"]]]);
+  const user = tool.documents[0]; const inDoc = new Set([...user.nav.flatMap((s) => s.pages), tool.index]);
+  const t = texWriter({ pages: p.pages, config: p.config, only: tool, inDoc }).document({ nav: user.nav, intro: tool.index, date: "1 Jan 2026", version: "", cover: { title: tool.title, subtitle: user.title } });
+  assert.ok(t.includes("\\title{Tool}") && t.includes("\\subtitle{User guide}") && t.includes("\\jpdocsection{Guides}") && !t.includes("\\jpdocsection{Extras}"));
+  assert.ok(!t.includes("\\hyperlink{h:tool-extras-more:part}") && t.includes("more"), "a page of another document is plain text");
+  // the site: a page links to the PDF of its document, the landing page lists both
+  mkdirSync(join(d, "dist"), { recursive: true }); for (const x of tool.documents) writeFileSync(join(d, "dist", x.file), `%PDF ${x.id}`);
+  writeFileSync(join(d, "dist/tool.pdf"), "%PDF old");
+  await buildSite(p); const s = join(d, "dist/site");
+  assert.equal(readFileSync(join(s, "tool/tool-user.pdf"), "utf8"), "%PDF user"); assert.ok(!existsSync(join(s, "tool/tool.pdf")), "the single PDF is not published");
+  const setup = readFileSync(join(s, "tool/guides/setup/index.html"), "utf8"); assert.ok(setup.includes('href="../../tool-user.pdf" title="User guide">PDF</a>') && !setup.includes("tool-dev.pdf"));
+  const more = readFileSync(join(s, "tool/extras/more/index.html"), "utf8"); assert.ok(more.includes('href="../../tool-dev.pdf"') && !more.includes("tool-user.pdf"));
+  const land = readFileSync(join(s, "tool/index.html"), "utf8");
+  assert.ok(land.includes('href="tool-user.pdf" title="For people who run the tool.">User guide (PDF)</a>') && land.includes('href="tool-dev.pdf">Developer reference (PDF)</a>') && !land.includes(">PDF</a>") && !land.includes("Download the PDF"));
+});
+test("documents: an unknown section or a bad id leaves the project out; a section in no document is a warning", async () => {
+  let d = hubWithDocuments([{ id: "user", title: "User guide", sections: ["guides", "nope"] }]); await importAll(d); let p = load(d);
+  assert.deepEqual(p.errors, []); assert.equal(p.projects.length, 1); assert.ok(p.warnings.join("\n").includes('document "user": unknown section "nope"'));
+  d = hubWithDocuments([{ id: "../x", title: "User guide", sections: ["guides"] }]); await importAll(d); p = load(d);
+  assert.equal(p.projects.length, 1); assert.ok(p.warnings.join("\n").includes("documents[0].id must be lower case"));
+  d = hubWithDocuments([TWO[0]]); await importAll(d); p = load(d);
+  assert.equal(p.projects.length, 2); assert.ok(p.warnings.join("\n").includes('section "extras" is in no document'));
+  // in this repository's own config a bad list is an error
+  d = copy(); const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8")); cfg.documents = [{ id: "a", title: "A", sections: [] }, { id: "a", title: "", sections: ["a"] }]; writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg));
+  const e = load(d).errors.join("\n"); for (const want of ["documents[0].sections must be a list", 'duplicate document id "a"', "documents[1] needs a title"]) assert.ok(e.includes(want), want);
+});
+test("documents: each one builds to its own PDF with the document title on the cover", { skip: !(have("xelatex") && have("pdftotext")) }, async () => {
+  const d = copy(); const cfg = JSON.parse(readFileSync(join(d, "docs.config.json"), "utf8"));
+  mkdirSync(join(d, "docs-src/develop")); writeFileSync(join(d, "docs-src/develop/build.md"), "---\ntitle: Build it\nsummary: Steps to build.\n---\n\n## Steps\n\nSee [[one]].\n");
+  cfg.documents = [{ id: "user", title: "User guide", sections: ["a"] }, { id: "dev", title: "Developer reference", sections: ["develop"] }]; writeFileSync(join(d, "docs.config.json"), JSON.stringify(cfg));
+  const p = load(d); assert.deepEqual(p.errors, []); const { buildAllPdfs } = await import("../src/build-pdf.mjs");
+  const r = await buildAllPdfs(p); assert.deepEqual(r.errors, []); assert.deepEqual(r.out.map((x) => x.pdf), ["dist/fixture-user.pdf", "dist/fixture-dev.pdf"]);
+  assert.ok(!existsSync(join(d, "dist/fixture.pdf")));
+  const text = (f) => spawnSync("pdftotext", [join(d, f), "-"], { encoding: "utf8" }).stdout;
+  const dev = text("dist/fixture-dev.pdf"); assert.ok(dev.includes("Developer reference") && dev.includes("Build it") && !dev.includes("Alpha"));
+  const user = text("dist/fixture-user.pdf"); assert.ok(user.includes("User guide") && user.includes("Alpha") && !user.includes("Build it"));
+});

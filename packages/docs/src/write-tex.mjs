@@ -21,8 +21,9 @@ const label = (id) => id.replace(/[^A-Za-z0-9]+/g, "-");
 const pageLabel = (id) => `page:${label(id)}`;
 const headLabel = (id, anchor) => `h:${label(id)}:${anchor}`;
 
-// only: the project this PDF is for. A link to a page of another project is written as plain text, because that page is not in the PDF.
-export function texWriter({ pages, config, only = null }) {
+// only: the project this PDF is for. inDoc: the pages in this PDF, when the project is split into documents. A link to a page of
+// another project or of another document is written as plain text, because that page is not in the PDF.
+export function texWriter({ pages, config, only = null, inDoc = null }) {
   const byId = new Map(pages.map((p) => [p.id, p]));
   const inl = (nodes, page) => nodes.map((n) => {
     switch (n.type) {
@@ -39,7 +40,7 @@ export function texWriter({ pages, config, only = null }) {
         return kids; // repo-relative links have no meaning on paper
       }
       case "image": return `\\jpimage{${resolve(dirname(page.abs), n.src).replace(/\\/g, "/")}}{${texEscape(n.alt)}}`;
-      case "xref": { const t = byId.get(n.id); if (only && t && t.project !== only) return inl(n.children ?? [], page) || texEscape(n.text || t.meta.title); const text = n.children ? inl(n.children, page) : texEscape(n.text || t?.meta.title || n.id); return `\\hyperlink{${n.anchor ? headLabel(n.id, n.anchor) : pageLabel(n.id)}}{${text}}`; }
+      case "xref": { const t = byId.get(n.id); if (t && ((only && t.project !== only) || (inDoc && !inDoc.has(t)))) return inl(n.children ?? [], page) || texEscape(n.text || t.meta.title); const text = n.children ? inl(n.children, page) : texEscape(n.text || t?.meta.title || n.id); return `\\hyperlink{${n.anchor ? headLabel(n.id, n.anchor) : pageLabel(n.id)}}{${text}}`; }
       case "term": return `\\jpterm{${texEscape(n.text)}}`;
       default: return "";
     }

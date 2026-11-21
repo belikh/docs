@@ -73,6 +73,34 @@ A folder in `docs-src` is a section. These five folder names have a fixed title,
 
 Any other folder becomes a section named after the folder. A project that needs its own titles or order lists `sections` in its `docs.config.json`; declared sections come first.
 
+## Several PDFs
+
+A project has one PDF that holds every section. A project that needs separate ones, such as a user guide, an installation guide and a developer reference, lists `documents` in its `docs.config.json`:
+
+**docs.config.json of the project**
+
+```json
+"documents": [
+  { "id": "user", "title": "User guide", "summary": "Run Aquila day to day.", "sections": ["guides", "concepts"] },
+  { "id": "install", "title": "Installation guide", "sections": ["start"] },
+  { "id": "developer", "title": "Developer reference", "sections": ["reference", "develop"] }
+]
+```
+
+| Key | Meaning |
+| --- | --- |
+| `id` | Lower case letters, digits and `-`. The PDF is `<project id>-<document id>.pdf`, so this example builds `aquila-user.pdf`, `aquila-install.pdf` and `aquila-developer.pdf`. |
+| `title` | Shown below the project name on the cover, and on the download button. |
+| `summary` | Optional. One sentence, shown when the pointer is over the download button. |
+| `sections` | The section ids in the document, in reading order. A section can be in more than one document. |
+
+The project's landing page has one download button per document. The PDF link at the top of a page opens the document that holds the page's section. The project's `index.md` opens every document. A link to a page of another document is plain text in the PDF, because that page is not in the file.
+
+`jupiter-docs check` reports a document that names an unknown section as an error. It warns about a section that is in no document, because its pages are then in no PDF.
+
+> [!WARNING]
+> A project with `documents` has no `<project id>.pdf`. A link to that file from another site stops working at the next build.
+
 ## Addresses and links
 
 A page is published at `/<project id>/<path of the file>/`, so `docs-src/guides/backup.md` of `aquila` is at `/aquila/guides/backup/`. The project's `index.md` is its landing page at `/aquila/`.

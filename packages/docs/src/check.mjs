@@ -6,6 +6,7 @@ import { visit, plain } from "./parse.mjs";
 import { findDiagram, findTerm } from "./source.mjs";
 import { DIAGRAM_NAME, lintDiagram, readDiagram } from "./diagram.mjs";
 import { pageDir } from "./write-html.mjs";
+import { documentErrors } from "./config.mjs";
 import { checkVoice, proseOf } from "./voice.mjs";
 import { graphicsSet } from "./resolve.mjs";
 
@@ -98,5 +99,15 @@ export function checkProject({ config, root, pages, projects }) {
   }
   for (const pr of noGlossaryPage) errors.push(`${pr.local ? config.src : where(pr)}: glossary terms are used but no page contains ::glossary`);
   for (const pr of projects) for (const s of pr.sections) if (!pr.nav.some((x) => x.id === s.id)) warnings.push(`${where(pr)}: section "${s.id}" has no pages`);
+  // documents: the hub's list was checked when the config was read; an imported project's list is checked here
+  for (const pr of projects) {
+    const spec = pr.documentSpec; if (spec === undefined) continue;
+    const shape = documentErrors(spec, `${where(pr)}: documents`);
+    if (shape.length) { if (!pr.local) errors.push(...shape); continue; }
+    const known = new Set(pr.sections.map((s) => s.id)); const used = new Set();
+    for (const d of spec) for (const id of d.sections) { used.add(id); if (!known.has(id)) errors.push(`${where(pr)}: document "${d.id}": unknown section "${id}" (known: ${[...known].join(", ") || "none"})`); }
+    for (const d of pr.documents) if (!d.nav.length) warnings.push(`${where(pr)}: document "${d.id}" has no pages; no PDF is built for it`);
+    for (const s of pr.nav) if (!used.has(s.id)) warnings.push(`${where(pr)}: section "${s.id}" is in no document, so its pages are in no PDF`);
+  }
   return { errors, warnings };
 }

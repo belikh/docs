@@ -1,5 +1,6 @@
-// LaTeX/PDF: one PDF per project. Each is written with write-tex.mjs, compiled with xelatex using jupiter-docs.cls, and the fonts
-// come from the LaTeX bundle. The hub's PDF holds the hub's pages; an imported project's PDF holds that project's pages.
+// LaTeX/PDF: one PDF per project, or one per document of a project that lists `documents`. Each is written with write-tex.mjs,
+// compiled with xelatex using jupiter-docs.cls, and the fonts come from the LaTeX bundle. The hub's PDF holds the hub's pages; an
+// imported project's PDF holds that project's pages.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
@@ -25,9 +26,6 @@ export function findLatex(project) {
 }
 const need = (cmd) => spawnSync(cmd, ["--version"], { stdio: "ignore" }).error === undefined;
 
-/** The file name of a project's PDF: the hub's is config.pdf (default {id}.pdf); an imported project's is {project id}.pdf. */
-export const pdfFileName = (config, pr) => (pr.local ? (config.pdf ?? `${config.id}.pdf`) : `${pr.id}.pdf`);
-
 function svgToPdf(svg, outFile, colour) {
   let s = svg.replace(/ pathLength="1"/g, "").replace(/ class="[^"]*"/, "");
   if (colour) s = s.replaceAll("currentColor", colour);
@@ -48,15 +46,17 @@ function diagramToPdf(svg, outFile, fontDir, work) {
   if (r.status !== 0) throw new Error(`rsvg-convert failed for a diagram: ${r.stderr || r.error?.message}`);
 }
 
-/** Build the PDF of one project: `only` is a project from project.projects (default: the hub). Returns { pdf, project, fonts }. */
-export async function buildPdf(project, { only = null, date } = {}) {
+/** Build one PDF: `only` is a project from project.projects (default: the hub), `document` one of its documents (default: the
+ *  first). Returns { pdf, project, document, fonts }. */
+export async function buildPdf(project, { only = null, document = null, date } = {}) {
   const { config, root, pages, projects } = project;
-  const pr = only ?? projects[0];
+  const pr = only ?? projects[0]; const doc = document ?? pr.documents[0];
+  const docPages = doc.nav.flatMap((s) => s.pages);
   const latex = findLatex(project); if (!latex) throw new Error("jupiter.sty not found: run npm run update:design (it downloads jupiter-latex.tgz into vendor/design/latex), or set latexDir / JUPITER_LATEX_DIR to an unpacked jupiter-latex.tgz");
   if (!latex.fontDir || !latex.graphicsDir) throw new Error(`${latex.dir}: the bundle has no fonts/ or graphics/; the PDF must use SGI Text, SGI Alt and JetBrains Mono`);
   if (!need("xelatex")) throw new Error("xelatex not found (install TeX Live: texlive-xetex texlive-latex-extra)");
   const tokens = resolveFile("@belikh/jupiter-tokens/tokens.sty", root); const tokensDir = join(tokens, "..");
-  const name = pr.local ? config.id : pr.id; const file = pdfFileName(config, pr);
+  const name = `${pr.local ? config.id : pr.id}${doc.id ? `-${doc.id}` : ""}`; const file = doc.file;
   const work = join(root, config.pdfOut, ".pdf-build", name); rmSync(work, { recursive: true, force: true }); mkdirSync(work, { recursive: true });
   const sty = readFileSync(tokens, "utf8"); const accent = "#" + /\\definecolor\{jplightAccent\}\{HTML\}\{([0-9A-Fa-f]{6})\}/.exec(sty)?.[1];
   const hasSvg = need("rsvg-convert") && /^#[0-9A-Fa-f]{6}$/.test(accent);
@@ -67,7 +67,7 @@ export async function buildPdf(project, { only = null, date } = {}) {
   }
   // diagrams: baked for the light theme and drawn by rsvg-convert. A PDF never leaves one out: if the tool is missing the build fails.
   const diagrams = new Map();
-  for (const p of pr.pages) visit(p.tree, (n) => { if (n.type === "diagram" && !diagrams.has(diagramSlug(n.name))) { const f = findDiagram(p, n.name); if (f) diagrams.set(diagramSlug(n.name), { file: f.file, name: n.name }); } });
+  for (const p of [...docPages, ...(pr.index ? [pr.index] : [])]) visit(p.tree, (n) => { if (n.type === "diagram" && !diagrams.has(diagramSlug(n.name))) { const f = findDiagram(p, n.name); if (f) diagrams.set(diagramSlug(n.name), { file: f.file, name: n.name }); } });
   if (diagrams.size) {
     if (!need("rsvg-convert")) throw new Error(`rsvg-convert not found (librsvg2-bin): the PDF would be built without its ${diagrams.size} diagram(s). Install it, or remove the ::diagram directives`);
     const colours = tokenColours(root);
@@ -75,17 +75,18 @@ export async function buildPdf(project, { only = null, date } = {}) {
   }
   const d = date ?? (process.env.SOURCE_DATE_EPOCH ? new Date(Number(process.env.SOURCE_DATE_EPOCH) * 1000) : new Date());
   const dateText = d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-  const w = texWriter({ pages, config, only: pr });
+  const w = texWriter({ pages, config, only: pr, inDoc: doc.id ? new Set([...docPages, ...(pr.index ? [pr.index] : [])]) : null });
   const version = pr.local ? (config.version ? `v${config.version}` : "") : (pr.version ? `v${pr.version}` : "");
-  const cover = pr.local ? {} : { title: pr.title, subtitle: pr.summary ?? "", repo: pr.url ?? "" };
-  writeFileSync(join(work, `${name}.tex`), w.document({ nav: pr.nav, intro: pr.index ?? null, date: dateText, version, cover }));
+  // the cover of a document: the project's name, with the document's title below it
+  const cover = { ...(pr.local ? {} : { title: pr.title, subtitle: pr.summary ?? "", repo: pr.url ?? "" }), ...(doc.id ? { subtitle: doc.title } : {}) };
+  writeFileSync(join(work, `${name}.tex`), w.document({ nav: doc.nav, intro: pr.index ?? null, date: dateText, version, cover }));
   const fonts = latex.fontDir ? latex.fontDir + "/" : "";
   const env = { ...process.env, TEXINPUTS: `.:${work}:${latex.ownDir}:${latex.classDir}:${latex.graphicsDir}:${tokensDir}:`, max_print_line: "10000", SOURCE_DATE_EPOCH: process.env.SOURCE_DATE_EPOCH ?? String(Math.floor(d.getTime() / 1000)) };
   let log = "";
   for (let pass = 1; pass <= 3; pass++) {
     const r = spawnSync("xelatex", ["-interaction=nonstopmode", "-halt-on-error", `-output-directory=${work}`, `\\def\\jpfontdir{${fonts}}\\input{${name}.tex}`], { cwd: work, env, encoding: "utf8" });
     log = r.stdout + r.stderr; writeFileSync(join(work, `${name}.log.txt`), log);
-    if (r.status !== 0) throw new Error(`xelatex failed for ${pr.local ? "this repository" : pr.id} (log: ${join(work, name + ".log.txt")}):\n${log.split("\n").slice(-25).join("\n")}`);
+    if (r.status !== 0) throw new Error(`xelatex failed for ${pr.local ? "this repository" : pr.id}${doc.id ? `, document ${doc.id}` : ""} (log: ${join(work, name + ".log.txt")}):\n${log.split("\n").slice(-25).join("\n")}`);
     if (pass >= 2 && !/Rerun to get|Label\(s\) may have changed/.test(log)) break;
   }
   // the TeX log file also records what a font could not draw; xelatex prints it to the screen only sometimes
@@ -96,16 +97,19 @@ export async function buildPdf(project, { only = null, date } = {}) {
   if (missing.length) throw new Error(`xelatex: glyphs missing from the fonts:\n  ${missing.join("\n  ")}\nMap it to a glyph of SGI Text, SGI Alt or JetBrains Mono with \\newunicodechar in latex/jupiter-docs.cls, or change the text (no other font is allowed).`);
   const outDir = join(root, config.pdfOut); mkdirSync(outDir, { recursive: true });
   copyFileSync(join(work, `${name}.pdf`), join(outDir, file));
-  return { pdf: join(config.pdfOut, file), project: pr.id, fonts: Boolean(latex.fontDir) };
+  return { pdf: join(config.pdfOut, file), project: pr.id, document: doc.id, fonts: Boolean(latex.fontDir) };
 }
 
-/** Build the PDF of every project that has pages. A project whose PDF fails is reported in `errors`; the others still build. */
+/** Build every PDF: one per project that has pages, or one per document of a project that lists `documents`. A PDF that fails is
+ *  reported in `errors`; the others still build. */
 export async function buildAllPdfs(project, { date } = {}) {
   const out = []; const errors = [];
   for (const pr of project.projects) {
-    if (!pr.nav.length) continue;
-    try { out.push(await buildPdf(project, { only: pr, date })); }
-    catch (e) { errors.push(`${pr.local ? "this repository" : pr.id}: ${e.message}`); }
+    for (const document of pr.documents) {
+      if (!document.nav.length) continue;
+      try { out.push(await buildPdf(project, { only: pr, document, date })); }
+      catch (e) { errors.push(`${pr.local ? "this repository" : pr.id}${document.id ? ` (${document.id})` : ""}: ${e.message}`); }
+    }
   }
   return { out, errors };
 }

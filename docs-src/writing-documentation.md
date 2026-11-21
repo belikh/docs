@@ -14,7 +14,7 @@ Documentation is written once, in `docs-src/`, as Markdown with a small header o
 | --- | --- | --- |
 | Static site for docs.jupiter.au | `dist/site` | `jupiter-docs build --site` |
 | Plain GitHub Markdown | `docs/*.md` | `jupiter-docs build --md` |
-| PDF, one per project | `dist/<id>.pdf` | `jupiter-docs build --pdf` |
+| PDF, one per project or one per document | `dist/<id>.pdf` | `jupiter-docs build --pdf` |
 
 ## Folder layout
 
@@ -117,7 +117,7 @@ npm install
 jupiter-docs check              # validate the source and its wording
 jupiter-docs voice README.rst   # check the wording of any other Markdown or .rst file
 jupiter-docs build              # write docs/*.md and dist/site
-jupiter-docs build --pdf        # also build one PDF per project (needs xelatex)
+jupiter-docs build --pdf        # build the PDFs: one per project, or one per document (needs xelatex)
 jupiter-docs build --check      # fail when docs/*.md is out of date (CI)
 jupiter-docs import             # fetch the projects named by sources and discover (docs-src/_imported)
 jupiter-docs init               # scaffold docs-src in a new project

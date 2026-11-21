@@ -4,7 +4,7 @@ import { join, posix, relative, sep } from "node:path";
 import YAML from "yaml";
 import { parseBody, visit, plain } from "./parse.mjs";
 import { STANDARD_SECTIONS } from "./spec.mjs";
-import { isFolder } from "./config.mjs";
+import { documentErrors, isFolder, pdfFile } from "./config.mjs";
 
 const walk = (dir) => readdirSync(dir).sort().flatMap((n) => { const p = join(dir, n); return statSync(p).isDirectory() ? walk(p) : p.endsWith(".md") ? [p] : []; });
 
@@ -41,7 +41,7 @@ export function loadPages(root, config, skip = new Set()) {
   const manifest = join(srcDir, "_imported/projects.json");
   const listed = existsSync(manifest) ? JSON.parse(readFileSync(manifest, "utf8")) : [];
   const make = (p) => ({ ...p, sections: (p.sections ?? []).map((s) => ({ ...s })), glossary: p.glossary ?? {}, pages: [] });
-  const hub = make({ id: "", diagrams: config.diagrams, title: config.project, summary: config.description ?? "", sections: config.sections, glossary: config.glossary, local: true });
+  const hub = make({ id: "", documents: config.documents, diagrams: config.diagrams, title: config.project, summary: config.description ?? "", sections: config.sections, glossary: config.glossary, local: true });
   const projects = [hub, ...listed.filter((p) => !skip.has(p.id)).map(make)];
   const byPid = new Map(projects.map((p) => [p.id, p]));
   for (const pr of projects) {
@@ -73,6 +73,13 @@ export function loadPages(root, config, skip = new Set()) {
     pr.index = pr.pages.find((p) => p.local === "index");
     pr.glossaryPage = pr.pages.find((p) => { let hit = false; visit(p.tree, (n) => { if (n.type === "glossary") hit = true; }); return hit; });
     pr.nav = pr.sections.map((s) => ({ ...s, pages: pr.pages.filter((p) => p !== pr.index && p.meta.section === s.id) })).filter((s) => s.pages.length);
+    // The PDFs of the project. Without `documents` there is one, with every section. With it, each entry is a PDF holding the
+    // sections it lists, in that order. documentSpec keeps what the config said, for `check`; a list with a problem is not used.
+    const name = pr.local ? config.id : pr.id; pr.documentSpec = pr.documents;
+    const spec = pr.documentSpec !== undefined && !documentErrors(pr.documentSpec, "").length ? pr.documentSpec : null;
+    pr.documents = spec
+      ? spec.map((d) => ({ id: d.id, title: d.title, summary: d.summary ?? "", file: pdfFile(name, d.id), nav: d.sections.map((id) => pr.nav.find((s) => s.id === id)).filter(Boolean) }))
+      : [{ id: "", title: "", summary: "", file: pr.local ? (config.pdf ?? pdfFile(name)) : pdfFile(name), nav: pr.nav }];
   }
   // [[id]] names a page of the same project first, then a page of the whole site; a project id alone names its landing page
   const resolveId = (p, id) => { const pre = p.project.id ? `${p.project.id}/` : ""; return [pre + id, `${pre}${id}/index`, id, `${id}/index`].find((c) => byId.has(c)) ?? id; };

@@ -116,7 +116,7 @@ export function readProject(dir, src, ref) {
   }
   let version = typeof pc.version === "string" ? pc.version : "";
   if (!version && pc.versionFrom && existsSync(join(dir, pc.versionFrom))) { try { version = String(JSON.parse(readFileSync(join(dir, pc.versionFrom), "utf8")).version ?? ""); } catch { /* not JSON: no version */ } }
-  const project = { id: pc.id, title: src.title ?? pc.project, summary: src.summary ?? pc.description ?? lead, icon: src.icon ?? pc.icon, version, sections: src.sections ?? pc.sections ?? [], glossary: pc.glossary ?? {}, diagrams: dirs };
+  const project = { id: pc.id, title: src.title ?? pc.project, summary: src.summary ?? pc.description ?? lead, icon: src.icon ?? pc.icon, version, sections: src.sections ?? pc.sections ?? [], glossary: pc.glossary ?? {}, diagrams: dirs, documents: src.documents ?? pc.documents };
   return { project, pages, assets };
 }
 
@@ -157,7 +157,7 @@ export async function runImport(config, root, log = console.log) {
           const meta = { title: m.title, summary: m.summary, section: m.section, ...(m.order !== undefined && { order: m.order }), ...(m.icon && { icon: m.icon }), ...(m.audience && { audience: m.audience }), ...(m.status && { status: m.status }), source: sourceOf(src.repo, ref, path) };
           pages.set(`${m.id}.md`, page(meta, convertBody(text, { repo: src.repo, ref, path, idByPath })));
         }
-        project = { title: src.title ?? name.split("/").pop(), summary: src.summary ?? "", icon: src.icon, version: "", sections: src.sections ?? [], glossary: {} };
+        project = { title: src.title ?? name.split("/").pop(), summary: src.summary ?? "", icon: src.icon, version: "", sections: src.sections ?? [], glossary: {}, documents: src.documents };
       } else {
         try {
           let dir = src.path ? resolve(root, src.path) : await checkout(src.repo, ref, temp);
