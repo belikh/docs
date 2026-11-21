@@ -22,6 +22,7 @@
     "ha-australia-carpark/development": "carpark-australia/development"
   },
   "sources": [
+    { "repo": "belikh/OpenUltraCode" },
     {
       "repo": "belikh/design",
       "ref": "latest",
