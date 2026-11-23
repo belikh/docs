@@ -143,7 +143,8 @@ body { font-size: var(--jp-fs-md); min-height: 100dvh; display: flex; flex-direc
 .dx-404 .dx-graphic--spot { margin-inline: 0; }
 
 /* ---------- narrow screens ---------- */
-@media (max-width: 1280px) { .dx-shell { grid-template-columns: var(--jp-size-sidebar) minmax(0, 1fr); } .dx-toc { display: none; } }
+/* a wide shell (the home page) has no sidebar or contents, so it keeps its single column at every width */
+@media (max-width: 1280px) { .dx-shell:not(.dx-shell--wide) { grid-template-columns: var(--jp-size-sidebar) minmax(0, 1fr); } .dx-toc { display: none; } }
 @media (max-width: 960px) {
   .dx-shell { grid-template-columns: minmax(0, 1fr); gap: var(--jp-space-5); padding-block-start: var(--jp-space-4); }
   .dx-nav { position: static; max-height: none; overflow: visible; border: 1px solid var(--jp-border); border-radius: var(--jp-radius-md); padding: 0; }
